@@ -1,0 +1,61 @@
+Name: wavy
+Version: 0.1
+Author: Daniel Díaz
+Category: Sound
+Build-type: Simple
+License: BSD3
+License-file: license
+Maintainer: Daniel Díaz (dhelta `dot` diaz `at` gmail `dot` com)
+Stability: Experimental
+Bug-reports: https://github.com/Daniel-Diaz/wavy/issues
+Synopsis: Haskell Sound Suite.
+Description: Haskell Sound library.
+Cabal-version: >= 1.8
+Tested-with: GHC == 7.4.2
+Extra-source-files:
+  README.md
+  -- Examples
+  examples/sine.hs
+  examples/karplus.hs
+  examples/square.hs
+  -- Benchmarks
+  bench/synth.hs
+  bench/encoding.hs
+
+Source-repository head
+  type: git
+  location: git://github.com/Daniel-Diaz/wavy.git
+
+Library
+  Build-depends: base ==4.*
+               , binary >= 0.6.4
+               , bytestring
+               , random
+               , deepseq
+               , vector
+  Exposed-modules:
+    Data.Sound
+    Data.Sound.Internal
+    Data.Sound.Container.Chunks
+    Data.Sound.WAVE
+  GHC-Options: -Wall -O2
+
+Benchmark wavy-bench-synth
+  type: exitcode-stdio-1.0
+  hs-source-dirs: bench
+  main-is: synth.hs
+  build-depends: base ==4.*
+               , wavy
+               , criterion
+  ghc-options: -O2
+
+Benchmark wavy-bench-encoding
+  type: exitcode-stdio-1.0
+  hs-source-dirs: bench
+  main-is: encoding.hs
+  build-depends: base ==4.*
+               , wavy
+               , criterion
+               , bytestring
+               , deepseq
+  ghc-options: -O2
