@@ -16,6 +16,8 @@ module Data.Sound (
  , sawtooth  , sawtoothR
  , square    , squareR
  , triangle  , triangleR
+   -- ** Variable Frequency Basic wave generators
+ , sineV     , sineVR
    -- ** Functional wave generators
  , fromFunction
    -- ** Other wave generators
@@ -345,6 +347,30 @@ sine :: Time   -- ^ Duration (0~)
      -> Sound
 {-# INLINE sine #-}
 sine = sineR 44100
+
+-- | Like 'sineV', but allows you to choose the sample rate.
+sineVR :: Word32 -- ^ Sample rate
+       -> Time   -- ^ Duration (0~)
+       -> Double -- ^ Amplitude (0~1)
+       -> (Time -> Time) -- ^ Frequency (Hz)
+       -> Time   -- ^ Phase
+       -> Sound
+{-# INLINE sineVR #-}
+sineVR r d a f p = fromFunction r d Nothing $
+  \t -> let s :: Time
+            s = pi2*f t*t + p
+        in  [a * sin s]
+
+-- | A variation of 'sine' with frequency that changes over time.
+--   If you are going to use a constant frequency, consider to use
+--   'sine' for a better performance.
+sineV :: Time   -- ^ Duration (0~)
+      -> Double -- ^ Amplitude (0~1)
+      -> (Time -> Time) -- ^ Frequency (Hz)
+      -> Time   -- ^ Phase
+      -> Sound
+{-# INLINE sineV #-}
+sineV = sineVR 44100
 
 -- | Like 'sawtooth', but allows you to choose the sample rate.
 sawtoothR :: Word32 -- ^ Sample rate
