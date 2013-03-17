@@ -18,6 +18,7 @@ Extra-source-files:
   examples/sine.hs
   examples/karplus.hs
   examples/square.hs
+  examples/sineV.hs
   -- Benchmarks
   bench/synth.hs
   bench/encoding.hs
