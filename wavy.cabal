@@ -8,6 +8,7 @@ License-file: license
 Maintainer: Daniel Díaz (dhelta `dot` diaz `at` gmail `dot` com)
 Stability: Experimental
 Bug-reports: https://github.com/Daniel-Diaz/wavy/issues
+Homepage: http://daniel-diaz.github.com/wavy
 Synopsis: Haskell Sound Suite.
 Description: Haskell Sound library.
 Cabal-version: >= 1.8
