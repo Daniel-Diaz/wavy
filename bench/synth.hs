@@ -5,7 +5,8 @@ import Data.Sound
 import Data.Sound.WAVE
 
 main :: IO ()
-main = defaultMain [
+main =
+  defaultMain [
     bgroup "Basic wave"
      [ bench "sine"     $ nf (sine     3 1 100) 0
      , bench "sawtooth" $ nf (sawtooth 3 1 100) 0

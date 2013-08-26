@@ -31,7 +31,7 @@ Source-repository head
 Library
   Build-depends: base ==4.*
                , binary >= 0.6.4
-               , bytestring
+               , bytestring == 0.10.*
                , random
                , deepseq
                , vector
@@ -40,7 +40,7 @@ Library
     Data.Sound.Internal
     Data.Sound.Container.Chunks
     Data.Sound.WAVE
-  GHC-Options: -Wall -O2
+  GHC-Options: -Wall -O2 -threaded
 
 benchmark wavy-bench-synth
   type: exitcode-stdio-1.0
@@ -49,7 +49,7 @@ benchmark wavy-bench-synth
   build-depends: base ==4.*
                , wavy
                , criterion
-  ghc-options: -O2
+  ghc-options: -O2 -threaded
 
 benchmark wavy-bench-encoding
   type: exitcode-stdio-1.0
@@ -58,4 +58,4 @@ benchmark wavy-bench-encoding
   build-depends: base ==4.*
                , wavy
                , criterion
-  ghc-options: -O2
+  ghc-options: -O2 -threaded

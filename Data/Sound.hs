@@ -99,7 +99,7 @@ s1@(S r l nc c) <|> s2@(S r' l' nc' c')
 
 {- About the associativity of the sequencing operator.
 
-If we are using balaced chunk appending, the sequencing operator (>.) should be
+If we are using balaced chunk appending, the sequencing operator (<.>) should be
 left associative (infixl). Suppose we have three sound chunks of size n. When we
 append two chunks, the right chunk gets balanced (unless it is already balanced)
 in order to get a balanced chunk after the appending. This makes balancing have
@@ -146,10 +146,10 @@ infixl 5 <.>
 --   * Both arguments must share the same /number of channels/.
 (<.>) :: Sound -> Sound -> Sound
 s1@(S r l nc c) <.> s2@(S r' l' nc' c')
- | r  /= r'  = soundError [s1,s2] ">." $ "Can't sequence sounds with different sample rates. "
-                                      ++ "Please, consider to change the sample rate of one of them."
- | nc /= nc' = soundError [s1,s2] ">." $ "Can't sequence two sounds with different number of channels. "
-                                      ++ "Please, consider to change the number of channels in one of them."
+ | r  /= r'  = soundError [s1,s2] "<.>" $ "Can't sequence sounds with different sample rates. "
+                                       ++ "Please, consider to change the sample rate of one of them."
+ | nc /= nc' = soundError [s1,s2] "<.>" $ "Can't sequence two sounds with different number of channels. "
+                                       ++ "Please, consider to change the number of channels in one of them."
  | otherwise = S r (l+l') nc $ c <> c'
 
 {-# RULES
@@ -456,6 +456,7 @@ noiseR :: Word32 -- ^ Sample rate
        -> Time   -- ^ Frequency (Hz)
        -> Int    -- ^ Random seed
        -> Sound
+{-# INLINE noiseR #-}
 noiseR r d a f sd = S r tn 1 cs
  where
   n = timeSample r $ recip f
@@ -468,13 +469,12 @@ noiseR r d a f sd = S r tn 1 cs
 
 -- | A randomly generated sound (mono). Different seeds will generate
 --   different sounds.
---
---   It is used to create 'karplus' waves.
 noise :: Time   -- ^ Duration (0~)
       -> Double -- ^ Amplitude (0~1)
       -> Time   -- ^ Frequency (Hz)
       -> Int    -- ^ Random seed
       -> Sound
+{-# INLINE noise #-}
 noise = noiseR 44100
 
 -- | Like 'karplus', but allows you choose a custom sample rate.

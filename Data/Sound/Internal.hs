@@ -116,7 +116,6 @@ sample s t = atSample (timeSample (rate s) t) s
 --
 mapSoundAt :: (Word32 -> Sample -> Sample)
           -> Sound -> Sound
-{-# NOINLINE mapSoundAt #-}
 mapSoundAt f s = s { schunks = mapChunks f (schunks s) }
 
 -- | Map a function over all samples in a given sound.
@@ -127,7 +126,6 @@ mapSoundAt f s = s { schunks = mapChunks f (schunks s) }
 --
 mapSound :: (Sample -> Sample)
          -> Sound -> Sound
-{-# NOINLINE mapSound #-}
 mapSound = mapSoundAt . const
 
 {-# RULES

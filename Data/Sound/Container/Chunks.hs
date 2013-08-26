@@ -97,7 +97,7 @@ chunk :: Array  -- ^ Chunk array.
       -> Word32 -- ^ Size of the array.
       -> Chunks -- ^ Chunks that go after the given array.
       -> Chunks
-chunk a l t = Chunk a l t
+chunk = Chunk
 
 -- | Chunk size should be even, so @chunkSize = 2 * halfChunkSize@.
 --   Current value is @22050@.
@@ -150,8 +150,10 @@ Empty |> x = Chunk (A.singleton x) 1 Empty
 --   depends on the sample index.
 mapChunks :: (Word32 -> Sample -> Sample) -> Chunks -> Chunks
 mapChunks _ Empty = Empty
-mapChunks f (Chunk a l t) =
-  chunk (A.imap (f . fromIntegral) a) l $ mapChunks (\i x -> f (i+l) x) t
+mapChunks f (Chunk a l t) = chunk (lf a) l (rf t)
+ where
+  lf = A.imap (f . fromIntegral)
+  rf = mapChunks $ \i x -> f (i+l) x
 
 -- FOLDS --
 
@@ -243,7 +245,7 @@ chunksFromList n ss = h (1,ss)
 --
 --   * @c1@ is Empty.
 -- 
---   * Every chunk in @c1@ excluding the last one has size 'chunkSize'.
+--   * Every chunk in @c1@ has size 'chunkSize'.
 --
 joinChunks :: Chunks -> Chunks -> Chunks
 joinChunks (Chunk a l t) c = Chunk a l $ joinChunks t c
