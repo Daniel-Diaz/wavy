@@ -12,7 +12,7 @@ Homepage: http://daniel-diaz.github.com/wavy
 Synopsis: Haskell Sound Suite.
 Description: Haskell Sound library.
 Cabal-version: >= 1.8
-Tested-with: GHC == 7.4.2
+Tested-with: GHC == 7.6.3
 Extra-source-files:
   README.md
   -- Examples
@@ -42,7 +42,7 @@ Library
     Data.Sound.WAVE
   GHC-Options: -Wall -O2
 
-Benchmark wavy-bench-synth
+benchmark wavy-bench-synth
   type: exitcode-stdio-1.0
   hs-source-dirs: bench
   main-is: synth.hs
@@ -51,13 +51,11 @@ Benchmark wavy-bench-synth
                , criterion
   ghc-options: -O2
 
-Benchmark wavy-bench-encoding
+benchmark wavy-bench-encoding
   type: exitcode-stdio-1.0
   hs-source-dirs: bench
   main-is: encoding.hs
   build-depends: base ==4.*
                , wavy
                , criterion
-               , bytestring
-               , deepseq
   ghc-options: -O2

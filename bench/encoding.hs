@@ -3,14 +3,6 @@ import Criterion.Main
 --
 import Data.Sound
 import Data.Sound.WAVE hiding (ByteString)
-import qualified Data.ByteString as S
-import Data.ByteString.Lazy (ByteString,toChunks)
-import Control.DeepSeq
-
-instance NFData S.ByteString where
-
-instance NFData ByteString where
- rnf = rnf . toChunks
 
 test :: Sound
 test = sine 3 1 100 0

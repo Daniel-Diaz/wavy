@@ -79,7 +79,7 @@ s1@(S r l nc c) <+> s2@(S r' l' nc' c')
                                        ++ "Please, consider to change the sample rate of one of them."
  | nc /= nc' = soundError [s1,s2] "<+>" $ "Can't add two sounds with different number of channels. "
                                        ++ "Please, consider to change the number of channels in one of them."
- | otherwise = S r (max l l') nc $ zipChunks (zipWith (+)) c c'
+ | otherwise = S r (max l l') nc $ zipChunks (zipSamplesWith (+)) c c'
 
 -- | /Parallelization of sounds/. Often refered as the /par/ operator.
 --   Applying this operator over two sounds will make them sound at the same
@@ -93,8 +93,8 @@ s1@(S r l nc c) <+> s2@(S r' l' nc' c')
 s1@(S r l nc c) <|> s2@(S r' l' nc' c')
  | r  /= r'  = soundError [s1,s2] "<|>" $ "Can't par sounds with different sample rates. "
                                        ++ "Please, consider to change the sample rate of one of them."
- | otherwise = let c'' = if l < l' then zipChunks (<>) (c <> zeroChunks (l' - l) nc) c'
-                                   else zipChunks (<>) c (c' <> zeroChunks (l-l') nc')
+ | otherwise = let c'' = if l < l' then zipChunks appendSamples (c <> zeroChunks (l' - l) nc) c'
+                                   else zipChunks appendSamples c (c' <> zeroChunks (l-l') nc')
                in  S r (max l l') (nc+nc') c''
 
 {- About the associativity of the sequencing operator.
@@ -154,7 +154,7 @@ s1@(S r l nc c) <.> s2@(S r' l' nc' c')
 
 {-# RULES
 "sound/multiplyFunction"
-   forall n r d p f. multiply n (fromFunction r d p f) = fromFunction r d p (concat . replicate n . f)
+   forall n r d p f. multiply n (fromFunction r d p f) = fromFunction r d p (multiplySample n . f)
   #-}
 
 -- | Multiply a sound over different channels. It will be just repeated over the different channels
@@ -196,7 +196,7 @@ velocity :: (Time -> Double) -- ^ @0 <= v t <= 1@.
          -> Sound
          -> Sound
 {-# INLINE velocity #-}
-velocity v s = mapSoundAt (\i -> fmap $ \x -> v (f i) * x) s
+velocity v s = mapSoundAt (\i -> mapSample $ \x -> v (f i) * x) s
  where
   r = rate s
   f = sampleTime r
@@ -237,11 +237,11 @@ pan p s = parWithPan p s $ zeroSoundR r $ duration s
 
 -- | Move a sound completly to the left.
 left :: Sound -> Sound
-left s = s <|> mapSound (fmap $ const 0) s
+left s = s <|> mapSound (mapSample $ const 0) s
 
 -- | Move a sound completly to the right.
 right :: Sound -> Sound
-right s = mapSound (fmap $ const 0) s <|> s
+right s = mapSound (mapSample $ const 0) s <|> s
 
 {-# RULES
 "sound/loop"    forall n m s. loop n (loop m s) = loop (n*m) s
@@ -335,7 +335,7 @@ sineR r d a f p = fromFunction r d (Just $ 1/f) $
   in  \t ->
         let s :: Time
             s = pi2f*t + p
-        in  [a * sin s]
+        in  monoSample $ a * sin s
 
 -- | Create a sine wave with the given duration, amplitude, frequency and phase (mono).
 --
@@ -359,7 +359,7 @@ sineVR :: Word32 -- ^ Sample rate
 sineVR r d a f p = fromFunction r d Nothing $
   \t -> let s :: Time
             s = pi2*f t*t + p
-        in  [a * sin s]
+        in  monoSample $ a * sin s
 
 -- | A variation of 'sine' with frequency that changes over time.
 --   If you are going to use a constant frequency, consider to use
@@ -383,7 +383,7 @@ sawtoothR :: Word32 -- ^ Sample rate
 sawtoothR r d a f p = fromFunction r d (Just $ 1/f) $ \t ->
  let s :: Time
      s = f*t + p
- in  [a * (2 * decimals s - 1)]
+ in  monoSample $ a * (2 * decimals s - 1)
 
 -- | Create a sawtooth wave with the given duration, amplitude, frequency and phase (mono).
 --
@@ -409,7 +409,7 @@ squareR r d a f p = fromFunction r d (Just $ 1/f) $ \t ->
      s = f*t + p
      h :: Time -> Double
      h x = signum $ 0.5 - x
- in  [a * h (decimals s)]
+ in  monoSample $ a * h (decimals s)
 
 -- | Create a square wave with the given duration, amplitude, frequency and phase (mono).
 --
@@ -433,7 +433,7 @@ triangleR :: Word32 -- ^ Sample rate
 triangleR r d a f p = fromFunction r d (Just $ 1/f) $ \t ->
  let s :: Time
      s = f*t + p
- in  [a * (1 - 4 * abs (timeFloor (s + 0.25) - s + 0.25))]
+ in  monoSample $ a * (1 - 4 * abs (timeFloor (s + 0.25) - s + 0.25))
 
 -- | Create a triange wave with the given duration, amplitude, frequency and phase (mono).
 --
@@ -461,7 +461,7 @@ noiseR r d a f sd = S r tn 1 cs
   n = timeSample r $ recip f
   xs = unfoldr (\(i,g) -> if i > n then Nothing
                                    else let (x,g') = randomR (-1,1) g
-                                        in  Just ([a*x],(i+1,g')))
+                                        in  Just (monoSample $ a*x,(i+1,g')))
             (1,mkStdGen sd)
   tn = timeSample r d
   cs = chunksFromList tn $ cycle xs

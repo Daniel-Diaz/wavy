@@ -116,10 +116,10 @@ writeData d bd =
   : let f = case bd of
              8  -> singleton   . cast8
              16 -> putWord16le . cast16
-             24 -> error "Wavy: 24-bits per sample is still not supported."
+             24 -> error "wavy: 24-bits per sample is still not supported."
              32 -> putWord32le . cast32
-             _  -> error $ "Wavy: Unsupported bits-per-sample: " ++ show bd ++ "."
-    in  linkedFoldChunks (foldr (\x xs -> f x <> xs) mempty) (samples d)
+             _  -> error $ "wavy: Unsupported bits-per-sample: " ++ show bd ++ "."
+    in  linkedFoldChunks (foldrSample (\x xs -> f x <> xs) mempty) (samples d)
 
 -- DECODING
 
@@ -200,10 +200,10 @@ getChunk bd nc cs =
      ncI = fromIntegral nc
      getSample :: Get Sample
      getSample = case bd of
-       8  -> fmap decast8  <$> replicateM ncI getWord8
-       16 -> fmap decast16 <$> replicateM ncI getWord16le
-       24 -> fail "24-bits per sample is still not supported."
-       32 -> fmap decast32 <$> replicateM ncI getWord32le
+       8  -> sampleFromList . fmap decast8  <$> replicateM ncI getWord8
+       16 -> sampleFromList . fmap decast16 <$> replicateM ncI getWord16le
+       24 -> fail "24-bits per sample is not supported yet."
+       32 -> sampleFromList . fmap decast32 <$> replicateM ncI getWord32le
        _  -> fail $ "Wavy: Unsupported bits-per-sample: " ++ show bd ++ "."
  in fmap (\xs -> chunk (chunkFromList xs) (fromIntegral cs) mempty) $ replicateM cs getSample
 

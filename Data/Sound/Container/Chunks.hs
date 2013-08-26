@@ -1,9 +1,21 @@
 
 -- | Internal representation of sounds chunks of samples.
 module Data.Sound.Container.Chunks (
-    -- * Types
-    Sample , Chunks , chunk
-    -- * Chunk size
+    -- * Samples
+    Sample
+  , monoSample
+  , multiSample
+  , sampleLength
+  , sampleFromList
+    -- ** Sample functions
+  , appendSamples
+  , mapSample
+  , foldrSample
+  , multiplySample
+  , zipSamplesWith
+    -- * Chunks
+  , Chunks , chunk
+    -- ** Chunk size
     -- $csize
   , chunkSize , chunkSizeInt
   , halfChunkSize
@@ -15,10 +27,15 @@ module Data.Sound.Container.Chunks (
   , joinChunks
     -- * Folds
   , foldChunks , linkedFoldChunks
+    -- * Traversals
+  , ccausaltr
   ) where
 
 import Data.Word
+import qualified Data.Foldable as F
 import qualified Data.Vector as A
+import qualified Data.Vector.Unboxed as U
+import Data.Vector.Mutable (write)
 --
 import Data.Monoid
 import Control.DeepSeq
@@ -28,7 +45,36 @@ import Control.DeepSeq
 --------------------------------------
 
 -- | A sample is a list of numbers from -1 to 1, one number per channel.
-type Sample = [Double]
+newtype Sample = Sample (U.Vector Double)
+
+monoSample :: Double -> Sample
+monoSample = Sample . U.singleton
+
+appendSamples :: Sample -> Sample -> Sample
+appendSamples (Sample v) (Sample w) = Sample $ v U.++ w
+
+-- | Create a 'Sample' with a given number of channels.
+multiSample :: Int -> Double -> Sample
+multiSample n x = Sample $ U.replicate n x
+
+sampleLength :: Sample -> Int
+sampleLength (Sample v) = U.length v
+
+sampleFromList :: [Double] -> Sample
+sampleFromList = Sample . U.fromList
+
+foldrSample :: (Double -> r -> r) -> r -> Sample -> r
+foldrSample f e (Sample v) = U.foldr f e v
+
+mapSample :: (Double -> Double) -> Sample -> Sample
+mapSample f (Sample v) = Sample $ U.map f v
+
+multiplySample :: Int -> Sample -> Sample
+multiplySample n (Sample v) =
+  Sample $ U.generate (n * U.length v) $ \i -> U.unsafeIndex v $ mod i n
+
+zipSamplesWith :: (Double -> Double -> Double) -> Sample -> Sample -> Sample
+zipSamplesWith f (Sample v) (Sample w) = Sample $ U.zipWith f v w
 
 -- Do not export this type. It is only for 'Chunks' use.
 type Array = A.Vector Sample
@@ -173,7 +219,7 @@ chunkFromList = A.fromList
 --    h z = case g z of
 --            Nothing -> e
 --            Just (x,y) -> f x (h y)
---
+
 -- | /O(n)/. Create sample chunks from a list, grouping samples in arrays
 --   of 'chunkSize'.
 chunksFromList :: Word32 -> [Sample] -> Chunks
@@ -203,6 +249,14 @@ joinChunks :: Chunks -> Chunks -> Chunks
 joinChunks (Chunk a l t) c = Chunk a l $ joinChunks t c
 joinChunks Empty c = c
 
+-- | Causal traverse.
+ccausaltr :: (a -> Sample -> (a,Sample)) -> a -> Chunks -> Chunks
+ccausaltr f e (Chunk a l t) =
+ let (e',a') = F.foldl' (\(x,v) i -> let (y,s) = f x $ a A.! i
+                                     in  (y,A.modify (\mv -> write mv i s) v) ) (e,a) [0.. fromIntegral (l-1)]
+ in  Chunk a' l $ ccausaltr f e' t
+ccausaltr _ _ Empty = Empty
+
 --------------------------------------
 --------------------------------------
 --------------------------------------
@@ -214,6 +268,9 @@ joinChunks Empty c = c
 instance Monoid Chunks where
  mempty = Empty
  mappend = appendChunks
+
+instance NFData Sample where
+ rnf (Sample v) = rnf v
 
 instance NFData Chunks where
  rnf Empty = ()

@@ -69,7 +69,7 @@ instance NFData Sound where
 atSample :: Word32 -- ^ Sample index.
          -> Sound  -- ^ Sound containing the sample.
          -> Sample
-atSample n (S _ _ nc cs) = fromMaybe (replicate nc 0) $ cs ! n
+atSample n (S _ _ nc cs) = fromMaybe (multiSample nc 0) $ cs ! n
 
 {-# RULES
 "sound/samples1" forall r i. timeSample r (sampleTime r i) = i
@@ -154,7 +154,7 @@ fromFunction rt d (Just p) f = S rt n nc $ chunksFromList n $ cycle xs
   -- Dealing with the period problem.
   (nP,r_) = properFraction (fromIntegral rt * p)
   r = toRational r_
-  nc = fromIntegral $ length $ f 0
+  nc = fromIntegral $ sampleLength $ f 0
   g = f . sampleTime rt
   basicList = fmap g [1..nP]
   addList   = fmap g [ nP + 1 .. nP + fromIntegral (numerator r) ]
@@ -165,7 +165,7 @@ fromFunction rt d Nothing f = S rt n nc $ chunksFromList n $
                                in  Just (y,i+1)) 1
  where
   n = timeSample rt d
-  nc = fromIntegral $ length $ f 0
+  nc = fromIntegral $ sampleLength $ f 0
   g = f . sampleTime rt
 
 -- | Create 'Chunks' with the given number of samples, each sample
@@ -174,4 +174,4 @@ zeroChunks :: Word32 -- ^ Number of samples.
            -> Int    -- ^ Number of channels.
            -> Chunks
 {-# INLINE zeroChunks #-}
-zeroChunks n nc = chunksFromList n $ cycle [replicate nc 0]
+zeroChunks n nc = chunksFromList n $ cycle [multiSample nc 0]
