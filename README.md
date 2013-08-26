@@ -11,7 +11,7 @@ and manipulation.
 # Benchmarks #
 
 Benchmarks are updated with any change in the library.
-They are grouped into different categories. Using GHC 7.4.2 as shipped in the
+They are grouped into different categories. Using GHC 7.6.3 as shipped in the
 [Haskell Platform](http://www.haskell.org/platform).
 
 * [Synths](http://daniel-diaz.github.com/wavy/wavy-bench-synth.html). In this benchmark we
