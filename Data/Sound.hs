@@ -169,7 +169,6 @@ s1@(S r l nc c) <.> s2@(S r' l' nc' c')
 --
 multiply :: Int -- ^ Number of channels factor.
          -> Sound -> Sound
-{-# NOINLINE multiply #-}
 multiply n s = f 1
  where
   f k = if k == n then s else s <|> f (k+1)
@@ -281,17 +280,6 @@ echo :: Word32 -- ^ Repetitions. How many times the sound is repeated.
      -> Sound  -- ^ Original sound.
      -> Sound  -- ^ Echo signal (without the original sound).
 echo 0 _   _   s = s
-{-
-echo n dec del s = mapSoundAt f s
-  where
-    l = timeSample (rate s) del
-    c = schunks s
-    f i x = let xs = [ fmap (mapSample (*q)) $ c ! (i - k*l)
-                     | k <- [1 .. n]
-                     , let q = dec ^ k
-                       ]
-            in  foldr1 (zipSamples (+)) $ x : catMaybes xs
--}
 echo n dec del s = s { schunks = ccausaltr f e $ schunks s }
   where
     e = Seq.empty
@@ -301,18 +289,15 @@ echo n dec del s = s { schunks = ccausaltr f e $ schunks s }
                         then seqInit past
                         else past
          in  x Seq.<| past'
-       , let xs = [ fmap (mapSample (*q)) $ safeIndex past (k-1)
+       , let xs = [ if k <= Seq.length past
+                       then Just $ mapSample (*q) $ Seq.index past (k-1)
+                       else Nothing
                   | i <- [1 .. n]
                   , let k = fromIntegral $ i*m
                   , let q = dec ^ i
                     ]
          in  foldr1 (zipSamples (+)) $ x : catMaybes xs
          )
-
-safeIndex :: Seq.Seq a -> Int -> Maybe a
-safeIndex xs n = if n > (Seq.length xs - 1) || n < 0
-                    then Nothing
-                    else Just $ Seq.index xs n
 
 seqInit :: Seq.Seq a -> Seq.Seq a
 seqInit xs = case Seq.viewr xs of
