@@ -48,8 +48,12 @@ import Data.Sound.Internal
 import Data.Sound.Container.Chunks
 -- Lists
 import Data.List (unfoldr)
+-- Maybe
+import Data.Maybe (catMaybes)
 -- Random
 import System.Random
+-- Sequences
+import qualified Data.Sequence as Seq
 
 -- | Add a silence at the beginning of a sound.
 addSilenceBeg :: Time -- ^ Duration of the silence.
@@ -79,7 +83,7 @@ s1@(S r l nc c) <+> s2@(S r' l' nc' c')
                                        ++ "Please, consider to change the sample rate of one of them."
  | nc /= nc' = soundError [s1,s2] "<+>" $ "Can't add two sounds with different number of channels. "
                                        ++ "Please, consider to change the number of channels in one of them."
- | otherwise = S r (max l l') nc $ zipChunks (zipSamplesWith (+)) c c'
+ | otherwise = S r (max l l') nc $ zipChunks (zipSamples (+)) c c'
 
 -- | /Parallelization of sounds/. Often refered as the /par/ operator.
 --   Applying this operator over two sounds will make them sound at the same
@@ -221,11 +225,19 @@ parWithPan :: (Time -> Double) -- ^ @-1 <= p t <= 1@.
            -> Sound
            -> Sound
 {-# INLINE parWithPan #-}
-parWithPan p s1 s2 = l <|> r
- where
-  -- Can we combine velocity calls so we only need to call it twice?
-  l = velocity (\t -> (1 - p t) / 2) s1 <+> velocity (\t -> (1 + p t) / 2 ) s2
-  r = velocity (\t -> (1 + p t) / 2) s1 <+> velocity (\t -> (1 - p t) / 2 ) s2
+parWithPan p s1@(S r1 n1 c1 ss1) s2@(S r2 n2 c2 ss2)
+ | r1 /= r2 = soundError [s1,s2] "parWithPan" $ "Can't par sounds with different sample rates. "
+                                             ++ "Please, consider to change the sample rate of one of them."
+ | c1 /= c2 = soundError [s1,s2] "parWithPan" $ "Can't par sounds with different number of channels. "
+                                             ++ "Please, consider to change the number of channels in one of them."
+ | otherwise = S r1 (max n1 n2) (c1*2) $ zipChunksAt f ss1 ss2
+  where
+   f i sx sy = let t  = sampleTime r1 i
+                   q1 = (1 - p t) / 2
+                   q2 = (1 + p t) / 2
+                   l  = zipSamples (\x y -> q1*x + q2*y) sx sy
+                   r  = zipSamples (\x y -> q1*y + q2*x) sx sy
+               in appendSamples l r
 
 -- | Pan a sound from left (-1) to right (1) with a time-dependent function.
 pan :: (Time -> Double) -- ^ @-1 <= p t <= 1@.
@@ -260,14 +272,52 @@ loop n = foldr1 (<.>) . replicate n
 -- ECHOING
 
 -- | Echo effect.
-echo :: Int    -- ^ Repetitions. How many times the sound is repeated.
+--
+-- > echo 0 dec del s = s
+--
+echo :: Word32 -- ^ Repetitions. How many times the sound is repeated.
      -> Double -- ^ Decay (@0 < decay < 1@). How fast the amplitude of the repetitions decays.
      -> Time   -- ^ Delay @0 < delay@. Time between repetitions.
      -> Sound  -- ^ Original sound.
      -> Sound  -- ^ Echo signal (without the original sound).
 echo 0 _   _   s = s
-echo n dec del s = foldr1 (<+>)
-  [ scale (dec ^ i) $ addSilenceBeg (fromIntegral i * del) s | i <- [1 .. n] ]
+{-
+echo n dec del s = mapSoundAt f s
+  where
+    l = timeSample (rate s) del
+    c = schunks s
+    f i x = let xs = [ fmap (mapSample (*q)) $ c ! (i - k*l)
+                     | k <- [1 .. n]
+                     , let q = dec ^ k
+                       ]
+            in  foldr1 (zipSamples (+)) $ x : catMaybes xs
+-}
+echo n dec del s = s { schunks = ccausaltr f e $ schunks s }
+  where
+    e = Seq.empty
+    m = timeSample (rate s) del
+    f past x =
+       ( let past' = if Seq.length past >= fromIntegral (n*m)
+                        then seqInit past
+                        else past
+         in  x Seq.<| past'
+       , let xs = [ fmap (mapSample (*q)) $ safeIndex past (k-1)
+                  | i <- [1 .. n]
+                  , let k = fromIntegral $ i*m
+                  , let q = dec ^ i
+                    ]
+         in  foldr1 (zipSamples (+)) $ x : catMaybes xs
+         )
+
+safeIndex :: Seq.Seq a -> Int -> Maybe a
+safeIndex xs n = if n > (Seq.length xs - 1) || n < 0
+                    then Nothing
+                    else Just $ Seq.index xs n
+
+seqInit :: Seq.Seq a -> Seq.Seq a
+seqInit xs = case Seq.viewr xs of
+  ys Seq.:> _ -> ys
+  _ -> Seq.empty
 
 {-
 -- INTEGRATION (possibly useful in the future)

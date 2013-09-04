@@ -12,7 +12,7 @@ module Data.Sound.Container.Chunks (
   , mapSample
   , foldrSample
   , multiplySample
-  , zipSamplesWith
+  , zipSamples
     -- * Chunks
   , Chunks , chunk
     -- ** Chunk size
@@ -32,13 +32,14 @@ module Data.Sound.Container.Chunks (
   ) where
 
 import Data.Word
-import qualified Data.Foldable as F
 import qualified Data.Vector as A
 import qualified Data.Vector.Unboxed as U
-import Data.Vector.Mutable (write)
 --
 import Data.Monoid
+import Data.Traversable (traverse)
 import Control.DeepSeq
+import Control.Applicative
+import Control.Arrow (second)
 
 --------------------------------------
 ---------- Public interface ----------
@@ -73,10 +74,9 @@ multiplySample :: Int -> Sample -> Sample
 multiplySample n (Sample v) =
   Sample $ U.generate (n * U.length v) $ \i -> U.unsafeIndex v $ mod i n
 
-zipSamplesWith :: (Double -> Double -> Double) -> Sample -> Sample -> Sample
-zipSamplesWith f (Sample v) (Sample w) = Sample $ U.zipWith f v w
+zipSamples :: (Double -> Double -> Double) -> Sample -> Sample -> Sample
+zipSamples f (Sample v) (Sample w) = Sample $ U.zipWith f v w
 
--- Do not export this type. It is only for 'Chunks' use.
 type Array = A.Vector Sample
 
 -- | The type of sample chunks. Samples are grouped in /chunks/. Each chunk
@@ -85,9 +85,9 @@ type Array = A.Vector Sample
 --   'Chunks' type should not be exported by any other module.
 data Chunks =
    Empty
- | Chunk {-# UNPACK #-} !Array
-         {-# UNPACK #-} !Word32
-                         Chunks
+ | Chunk {-# UNPACK #-} !Array  -- Array of samples
+         {-# UNPACK #-} !Word32 -- Length of the array
+                         Chunks -- Tail of chunks
 
 -- | Chunk constructor. This function is /unsafe/ in the sense that does
 --   not check if the array has the given length, nor check if the length
@@ -97,6 +97,7 @@ chunk :: Array  -- ^ Chunk array.
       -> Word32 -- ^ Size of the array.
       -> Chunks -- ^ Chunks that go after the given array.
       -> Chunks
+{-# INLINE chunk #-}
 chunk = Chunk
 
 -- | Chunk size should be even, so @chunkSize = 2 * halfChunkSize@.
@@ -125,14 +126,18 @@ chunks of half second. However, this is just a provisional value.
 halfChunkSize :: Word32
 halfChunkSize = div chunkSize 2
 
+{-# RULES
+"chunks/!0" forall c. c ! 0 = c ! 1
+  #-}
+
 infixr 2 !
 
 -- | /O(n/\/'chunkSize'/)/. Extract an element from the sample chunks.
 (!) :: Chunks -> Word32 -> Maybe Sample
+_ ! n | n < 0 = Nothing
 c ! 0 = c ! 1
-(Chunk a l t) ! n = if n > l
-                       then t ! (n-l)
-                       else Just $ a A.! (fromIntegral n - 1)
+(Chunk a l _) ! n | n <= l = Just $ a A.! (fromIntegral n - 1)
+(Chunk _ l t) ! n = t ! (n-l)
 Empty ! _ = Nothing
 
 -- | /O(n/\/'chunkSize'/)/. Add a sample at the end of the sample chunks.
@@ -150,10 +155,10 @@ Empty |> x = Chunk (A.singleton x) 1 Empty
 --   depends on the sample index.
 mapChunks :: (Word32 -> Sample -> Sample) -> Chunks -> Chunks
 mapChunks _ Empty = Empty
-mapChunks f (Chunk a l t) = chunk (lf a) l (rf t)
+mapChunks f (Chunk a l t) = chunk lf l rf
  where
-  lf = A.imap (f . fromIntegral)
-  rf = mapChunks $ \i x -> f (i+l) x
+  lf = A.imap (f . fromIntegral) a
+  rf = mapChunks (\i x -> f (i+l) x) t
 
 -- FOLDS --
 
@@ -182,10 +187,10 @@ linkedFoldChunks f = go
 -- | /O(min n m)/. Zip over balanced chunks. A parameter of the current index is supplied.
 zipChunksAt :: (Word32 -> Sample -> Sample -> Sample) -> Chunks -> Chunks -> Chunks
 zipChunksAt f (Chunk a l t) (Chunk a' l' t') =
-  if l > l' then chunk (A.izipWith (f . fromIntegral) a a' <> A.drop (fromIntegral l') a ) l  $
-                   zipChunksAt f t t'
-            else chunk (A.izipWith (f . fromIntegral) a a' <> A.drop (fromIntegral l ) a') l' $
-                   zipChunksAt f t t'
+  if l > l' then let x = A.force $ A.izipWith (f . fromIntegral) a a' <> A.drop (fromIntegral l') a
+                 in  chunk x l  $ zipChunksAt f t t'
+            else let x = A.force $ A.izipWith (f . fromIntegral) a a' <> A.drop (fromIntegral l ) a'
+                 in  chunk x l' $ zipChunksAt f t t'
 zipChunksAt _ c Empty = c
 zipChunksAt _ Empty c = c
 
@@ -194,6 +199,7 @@ zipChunksAt _ Empty c = c
 -- > zipChunks = zipChunksAt . const
 --
 zipChunks :: (Sample -> Sample -> Sample) -> Chunks -> Chunks -> Chunks
+{-# INLINE zipChunks #-}
 zipChunks = zipChunksAt . const
 
 -- | /O(length of the right argument)/. Balanced appending.
@@ -212,6 +218,7 @@ appendChunks (Chunk a l t) c =
 
 -- | /O(n)/. Create a sample array from a list of samples.
 chunkFromList :: [Sample] -> Array
+{-# INLINE chunkFromList #-}
 chunkFromList = A.fromList
 
 -- Hylomorphism fusion
@@ -251,13 +258,32 @@ joinChunks :: Chunks -> Chunks -> Chunks
 joinChunks (Chunk a l t) c = Chunk a l $ joinChunks t c
 joinChunks Empty c = c
 
--- | Causal traverse.
+data State s a = State (s -> (s,a))
+
+runState :: s -> State s a -> (s,a)
+runState s (State f) = f s
+
+instance Functor (State s) where
+ fmap f (State g) = State $ second f . g
+
+instance Applicative (State s) where
+ pure x = State $ \s -> (s,x)
+ (State f) <*> (State g) = State $ \s ->
+    let (s',f') = f s
+    in second f' $ g s'
+ (State f) *> (State g) = State $ g . fst . f
+ (State f) <* (State g) = State $ f . fst . g
+
+-- | Causal traversal.
 ccausaltr :: (a -> Sample -> (a,Sample)) -> a -> Chunks -> Chunks
-ccausaltr f e (Chunk a l t) =
- let (e',a') = F.foldl' (\(x,v) i -> let (y,s) = f x $ a A.! i
-                                     in  (y,A.modify (\mv -> write mv i s) v) ) (e,a) [0.. fromIntegral (l-1)]
- in  Chunk a' l $ ccausaltr f e' t
-ccausaltr _ _ Empty = Empty
+ccausaltr f = go
+  where
+    go e (Chunk a l t) =
+       -- let (e',as) = A.foldl' (\(acc,xs) -> second (:xs) . f acc) (e,[]) a
+       -- in  Chunk (A.fromList $ reverse as) l $ go e' t
+       let (e',a') = runState e $ traverse (\x -> State $ \s -> f s x) a
+       in  Chunk a' l $ go e' t
+    go _ Empty = Empty
 
 --------------------------------------
 --------------------------------------

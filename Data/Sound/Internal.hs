@@ -172,4 +172,4 @@ zeroChunks :: Word32 -- ^ Number of samples.
            -> Int    -- ^ Number of channels.
            -> Chunks
 {-# INLINE zeroChunks #-}
-zeroChunks n nc = chunksFromList n $ cycle [multiSample nc 0]
+zeroChunks n nc = chunksFromList n $ repeat $ multiSample nc 0
