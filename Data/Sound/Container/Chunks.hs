@@ -28,7 +28,7 @@ module Data.Sound.Container.Chunks (
     -- * Folds
   , foldChunks , linkedFoldChunks
     -- * Traversals
-  , ccausaltr
+  , causaltr
   ) where
 
 import Data.Word
@@ -254,8 +254,8 @@ joinChunks (Chunk a l t) c = Chunk a l $ joinChunks t c
 joinChunks _ c = c
 
 -- | Causal traversal.
-ccausaltr :: (a -> Sample -> (a,Sample)) -> a -> Chunks -> Chunks
-ccausaltr f = go
+causaltr :: (a -> Sample -> (a,Sample)) -> a -> Chunks -> Chunks
+causaltr f = go
   where
     go e (Chunk a l t) =
        let (e',a') = mapAccumL f e a

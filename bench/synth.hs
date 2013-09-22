@@ -15,7 +15,8 @@ main =
        ]
   , bgroup "Misc wave"
      [ bench "zero"     $ nf zeroSound 3
-     , bench "noise"    $ nf (noise    3 1 100) 0
+     , bench "noise"    $ nf (noise    3 1) 0
+     , bench "pnoise"   $ nf (pnoise   3 1 100) 0
      , bench "karplus"  $ nf (karplus  3 1 100 0.01) 0
        ]
   ]

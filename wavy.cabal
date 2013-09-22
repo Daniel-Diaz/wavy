@@ -36,6 +36,7 @@ Library
                , deepseq
                , vector
                , containers
+               , AC-Random
   Exposed-modules:
     Data.Sound
     Data.Sound.Internal

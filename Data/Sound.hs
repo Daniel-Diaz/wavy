@@ -22,6 +22,7 @@ module Data.Sound (
  , fromFunction
    -- ** Other wave generators
  , noise   , noiseR
+ , pnoise  , pnoiseR
  , karplus , karplusR
 
    -- * Sound operators
@@ -47,11 +48,11 @@ import Data.Monoid
 import Data.Sound.Internal
 import Data.Sound.Container.Chunks
 -- Lists
-import Data.List (unfoldr)
+import Data.List (genericTake)
 -- Maybe
 import Data.Maybe (catMaybes)
 -- Random
-import System.Random
+import Random.MWC.Pure
 -- Sequences
 import qualified Data.Sequence as Seq
 
@@ -278,9 +279,9 @@ echo :: Word32 -- ^ Repetitions. How many times the sound is repeated.
      -> Double -- ^ Decay (@0 < decay < 1@). How fast the amplitude of the repetitions decays.
      -> Time   -- ^ Delay @0 < delay@. Time between repetitions.
      -> Sound  -- ^ Original sound.
-     -> Sound  -- ^ Echo signal (without the original sound).
+     -> Sound  -- ^ Echoed sound.
 echo 0 _   _   s = s
-echo n dec del s = s { schunks = ccausaltr f e $ schunks s }
+echo n dec del s = s { schunks = causaltr f e $ schunks s }
   where
     e = Seq.empty
     m = timeSample (rate s) del
@@ -343,7 +344,7 @@ timeFloor = fromIntegral . (floor :: Time -> Int) -- Don't use truncate!
 decimals :: Time -> Time
 decimals = snd . (properFraction :: Time -> (Int,Time))
 
--- | Like 'zeroSound', but allows you to choose the sample rate.
+-- | Like 'zeroSound', but allowing to choose a custom sample rate.
 zeroSoundR :: Word32 -> Time -> Sound
 {-# INLINE zeroSoundR #-}
 zeroSoundR r d = S r n 1 $ zeroChunks n 1
@@ -357,7 +358,7 @@ zeroSound :: Time -> Sound
 {-# INLINE zeroSound #-}
 zeroSound = zeroSoundR 44100
 
--- | Like 'sine', but allows you to choose the sample rate.
+-- | Like 'sine', but allowing to choose a custom sample rate.
 sineR :: Word32 -- ^ Sample rate
       -> Time   -- ^ Duration (0~)
       -> Double -- ^ Amplitude (0~1)
@@ -383,7 +384,7 @@ sine :: Time   -- ^ Duration (0~)
 {-# INLINE sine #-}
 sine = sineR 44100
 
--- | Like 'sineV', but allows you to choose the sample rate.
+-- | Like 'sineV', but allowing to choose the sample rate.
 sineVR :: Word32 -- ^ Sample rate
        -> Time   -- ^ Duration (0~)
        -> Double -- ^ Amplitude (0~1)
@@ -407,7 +408,7 @@ sineV :: Time   -- ^ Duration (0~)
 {-# INLINE sineV #-}
 sineV = sineVR 44100
 
--- | Like 'sawtooth', but allows you to choose the sample rate.
+-- | Like 'sawtooth', but allowing to choose the sample rate.
 sawtoothR :: Word32 -- ^ Sample rate
           -> Time   -- ^ Duration (0~)
           -> Double -- ^ Amplitude (0~1)
@@ -431,7 +432,7 @@ sawtooth :: Time   -- ^ Duration (0~)
 {-# INLINE sawtooth #-}
 sawtooth = sawtoothR 44100
 
--- | Like 'square', but allows you to choose the sample rate.
+-- | Like 'square', but allowing to choose the sample rate.
 squareR :: Word32 -- ^ Sample rate
         -> Time   -- ^ Duration (0~)
         -> Double -- ^ Amplitude (0~1)
@@ -457,7 +458,7 @@ square :: Time   -- ^ Duration (0~)
 {-# INLINE square #-}
 square = squareR 44100
 
--- | As in 'triangle', but allows you to choose the sample rate.
+-- | As in 'triangle', but allowing to choose the sample rate.
 triangleR :: Word32 -- ^ Sample rate
           -> Time   -- ^ Duration (0~)
           -> Double -- ^ Amplitude (0~1)
@@ -484,51 +485,81 @@ triangle = triangleR 44100
 -------------------
 -- OTHER SYNTHS
 
--- | Like 'noise', but allows you to choose the sample rate.
-noiseR :: Word32 -- ^ Sample rate
-       -> Time   -- ^ Duration (0~)
-       -> Double -- ^ Amplitude (0~1)
-       -> Time   -- ^ Frequency (Hz)
-       -> Int    -- ^ Random seed
-       -> Sound
-{-# INLINE noiseR #-}
-noiseR r d a f sd = S r tn 1 cs
+-- | Specialized random generator.
+randomRs :: (Double,Double) -> Seed -> [Double]
+randomRs (x,y) = go
+  where
+   go g = let (r,g') = range_random (x,y) g
+          in  r : go g'
+
+-- | Like 'noise', but allowing to choose the sample rate.
+pnoiseR :: Word32 -- ^ Sample rate
+        -> Time   -- ^ Duration (0~)
+        -> Double -- ^ Amplitude (0~1)
+        -> Time   -- ^ Frequency (Hz)
+        -> Word32 -- ^ Random seed
+        -> Sound
+{-# INLINE pnoiseR #-}
+pnoiseR r d a f sd = S r tn 1 cs
  where
   n = timeSample r $ recip f
-  xs = unfoldr (\(i,g) -> if i > n then Nothing
-                                   else let (x,g') = randomR (-1,1) g
-                                        in  Just (monoSample $ a*x,(i+1,g')))
-            (1,mkStdGen sd)
+  xs = genericTake n $ fmap monoSample $ randomRs (-a,a) $ seed [sd]
   tn = timeSample r d
   cs = chunksFromList tn $ cycle xs
 
--- | A randomly generated sound (mono). Different seeds will generate
+-- | A randomly generated sound (mono) with frequency. Different seeds will generate
 --   different sounds.
-noise :: Time   -- ^ Duration (0~)
-      -> Double -- ^ Amplitude (0~1)
-      -> Time   -- ^ Frequency (Hz)
-      -> Int    -- ^ Random seed
-      -> Sound
-{-# INLINE noise #-}
-noise = noiseR 44100
+pnoise :: Time   -- ^ Duration (0~)
+       -> Double -- ^ Amplitude (0~1)
+       -> Time   -- ^ Frequency (Hz)
+       -> Word32 -- ^ Random seed
+       -> Sound
+{-# INLINE pnoise #-}
+pnoise = pnoiseR 44100
 
--- | Like 'karplus', but allows you choose a custom sample rate.
+-- | Like 'karplus', but allowing to choose a custom sample rate.
 karplusR :: Word32 -- ^ Sample rate
          -> Time   -- ^ Duration (0~)
          -> Double -- ^ Amplitude (0~1)
          -> Time   -- ^ Frequency (Hz)
          -> Double -- ^ Decay (0~1)
-         -> Int    -- ^ Random seed
+         -> Word32 -- ^ Random seed
          -> Sound
 {-# INLINE karplusR #-}
-karplusR r d a f dc = velocity (dc**) . noiseR r d a f
+karplusR r d a f dc = velocity (dc**) . pnoiseR r d a f
 
--- | String-like sound based on randomly generated signals (see 'noise').
+-- | String-like sound based on randomly generated signals (see 'pnoise').
 karplus :: Time   -- ^ Duration (0~)
         -> Double -- ^ Amplitude (0~1)
         -> Time   -- ^ Frequency (Hz)
         -> Double -- ^ Decay (0~1)
-        -> Int    -- ^ Random seed
+        -> Word32 -- ^ Random seed
         -> Sound
 {-# INLINE karplus #-}
 karplus = karplusR 44100
+
+-- | A randomly generated sound (mono) without frequency. Different seeds will generate
+--   different sounds. For long sounds, a similar effect can be obtained using 'pnoise'
+--   with much better performance. While 'noise' create new random values for the entire
+--   length of the sound, 'pnoise' only creates a small portion that is repeated until
+--   reaching the specified duration. If the frequency given to 'pnoise' is low enough
+--   (any frequency lower than the human range should work) it should create a very similar
+--   sound effect than the one 'noise' does.
+noise :: Time   -- ^ Duration (0~)
+      -> Double -- ^ Amplitude (0~1)
+      -> Word32 -- ^ Random seed
+      -> Sound
+{-# INLINE noise #-}
+noise = noiseR 44100
+
+-- | Like 'totalRandom', but allowing to choose a custom sample rate.
+noiseR :: Word32 -- ^ Sample rate
+       -> Time   -- ^ Duration (0~)
+       -> Double -- ^ Amplitude (0~1)
+       -> Word32 -- ^ Random seed
+       -> Sound
+{-# INLINE noiseR #-}
+noiseR r d a sd = S r n 1 $ chunksFromList n xs
+  where
+    n  = timeSample r d
+    xs = fmap monoSample $ randomRs (-a,a) $ seed [sd]
