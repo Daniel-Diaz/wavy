@@ -41,7 +41,7 @@ module Data.Sound (
    -- * Effects
  , echo
    -- * Utils
- , loop
+ , loop, trim
    ) where
 
 import Data.Monoid
@@ -166,7 +166,7 @@ s1@(S r l nc c) <.> s2@(S r' l' nc' c')
 --   with the same amplitude (unlike 'divide'). The number of channels will be multiplied by the
 --   given factor.
 --
--- > multiply n (fromFunction r d p f) = fromFunction r d p (concat . replicate n . f)
+-- > multiply n (fromFunction r d p f) = fromFunction r d p (multiplySample n . f)
 --
 multiply :: Int -- ^ Number of channels factor.
          -> Sound -> Sound
@@ -178,10 +178,7 @@ multiply n s = f 1
 divide :: Int -- ^ Number of channels factor.
        -> Sound -> Sound
 {-# INLINE divide #-}
-divide n s = let s' = multiply n s
-             in  scale (1/n') s'
- where
-  n' = fromIntegral n
+divide n s = scale (recip $ fromIntegral n) $ multiply n s
 
 -- | This function works like '<+>', but it allows you to choose at which time add the sound.
 --   This way, @insertAt t s1 s2@ will add @s1@ to @s2@ starting at the second @t@.
@@ -240,18 +237,21 @@ parWithPan p s1@(S r1 n1 c1 ss1) s2@(S r2 n2 c2 ss2)
                in appendSamples l r
 
 -- | Pan a sound from left (-1) to right (1) with a time-dependent function.
+--
+-- > pan (const (-1)) = left
+-- > pan (const   0 ) = divide 2
+-- > pan (const   1 ) = right
+--
 pan :: (Time -> Double) -- ^ @-1 <= p t <= 1@.
     -> Sound
     -> Sound
-pan p s = parWithPan p s $ zeroSoundR r $ duration s
- where
-  r = rate s
+pan p s = parWithPan p s $ zeroSoundR (rate s) $ duration s
 
--- | Move a sound completly to the left.
+-- | Move a sound completely to the left.
 left :: Sound -> Sound
 left s = s <|> mapSound (mapSample $ const 0) s
 
--- | Move a sound completly to the right.
+-- | Move a sound completely to the right.
 right :: Sound -> Sound
 right s = mapSound (mapSample $ const 0) s <|> s
 
@@ -268,6 +268,26 @@ right s = mapSound (mapSample $ const 0) s <|> s
 --
 loop :: Int -> Sound -> Sound
 loop n = foldr1 (<.>) . replicate n
+
+-- | Extract a continous segment of the sound.
+trim :: Time  -- ^ Start time
+     -> Time  -- ^ End time
+     -> Sound
+     -> Sound
+trim t0 t1 s = trimIndex n0 n1 s
+  where
+    r  = rate s
+    n0 = timeSample r t0
+    n1 = timeSample r t1
+
+trimIndex :: Word32 -- ^ Start index
+          -> Word32 -- ^ End index
+          -> Sound
+          -> Sound
+trimIndex n0 n1 s@(S r n c ss)
+  | n0 >= n = S r 0 c mempty
+  | n1 >= n = trimIndex n0 (n-1) s
+  | otherwise = S r (n1-n0) c $ trimChunks n0 n1 ss
 
 -- ECHOING
 
@@ -294,7 +314,7 @@ echo n dec del s = s { schunks = causaltr f e $ schunks s }
                        then Just $ mapSample (*q) $ Seq.index past (k-1)
                        else Nothing
                   | i <- [1 .. n]
-                  , let k = fromIntegral $ i*m
+                  , let k = fromIntegral (i*m)
                   , let q = dec ^ i
                     ]
          in  foldr1 (zipSamples (+)) $ x : catMaybes xs

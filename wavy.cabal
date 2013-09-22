@@ -32,7 +32,6 @@ Library
   Build-depends: base ==4.*
                , binary >= 0.6.4
                , bytestring == 0.10.*
-               , random
                , deepseq
                , vector
                , containers

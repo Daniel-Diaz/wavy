@@ -25,6 +25,7 @@ module Data.Sound.Container.Chunks (
   , zipChunks , zipChunksAt
   , chunkFromList , chunksFromList
   , joinChunks
+  , trimChunks
     -- * Folds
   , foldChunks , linkedFoldChunks
     -- * Traversals
@@ -179,16 +180,18 @@ linkedFoldChunks f = go
 
 -- | /O(min n m)/. Zip over balanced chunks. A parameter of the current index is supplied.
 zipChunksAt :: (Word32 -> Sample -> Sample -> Sample) -> Chunks -> Chunks -> Chunks
-zipChunksAt f (Chunk a l t) (Chunk a' l' t') =
-  let (lmin,lmax,maxa) = if l <= l' then (l,l',a') else (l',l,a)
-      x = A.generate (fromIntegral lmax) $
-          \i -> let wi = fromIntegral i
-                in  if wi < lmin
-                       then f wi (A.unsafeIndex a i) (A.unsafeIndex a' i)
-                       else A.unsafeIndex maxa i
-  in  Chunk x lmax $ zipChunksAt f t t'
-zipChunksAt _ c Empty = c
-zipChunksAt _ _ c = c
+zipChunksAt f = go 0
+  where
+    go n (Chunk a l t) (Chunk a' l' t') =
+         let (lmin,lmax,maxa) = if l <= l' then (l,l',a') else (l',l,a)
+             x = A.generate (fromIntegral lmax) $
+                 \i -> let wi = fromIntegral i
+                       in  if wi < lmin
+                              then f (n+wi) (A.unsafeIndex a i) (A.unsafeIndex a' i)
+                              else A.unsafeIndex maxa i
+         in  Chunk x lmax $ go (n+chunkSize) t t'
+    go _ c Empty = c
+    go _ _ c = c
 
 -- | /O(min n m)/. Zip over balanced chunks.
 --
@@ -202,8 +205,9 @@ zipChunks = zipChunksAt . const
 appendChunks :: Chunks -> Chunks -> Chunks
 appendChunks (Chunk a l Empty) c@(Chunk a' l' t)
  | l == chunkSize = Chunk a l c
- | l' > d = let sd = A.take (fromIntegral d) a'
-            in  Chunk (a <> sd) chunkSize $ appendChunks (chunk (A.drop (fromIntegral d) a') (l'-d) Empty) t
+ | l' > d = let dInt = fromIntegral d
+                sd = A.take dInt a'
+            in  Chunk (a <> sd) chunkSize $ appendChunks (chunk (A.drop dInt a') (l'-d) Empty) t
  | otherwise = appendChunks (Chunk (a <> a') (l+l') Empty) t
     where
      d = chunkSize - l
@@ -252,6 +256,16 @@ chunksFromList n ss = h (1,ss)
 joinChunks :: Chunks -> Chunks -> Chunks
 joinChunks (Chunk a l t) c = Chunk a l $ joinChunks t c
 joinChunks _ c = c
+
+trimChunks :: Word32 -> Word32 -> Chunks -> Chunks
+trimChunks n0 n1 (Chunk a l t)
+  | n0 >= l = trimChunks (n0-l) (n1-l) t
+  | n1 <  l = Chunk (A.slice (fromIntegral n0) (fromIntegral $ n1-n0) a) (n1-n0) Empty
+           <> t
+  | n0 == 0 = Chunk a l $ trimChunks 0 (n1-l) t
+  | otherwise = Chunk (A.drop (fromIntegral n0) a) (l-n0) Empty
+             <> trimChunks 0 (n1-l) t
+trimChunks _ _ _ = Empty
 
 -- | Causal traversal.
 causaltr :: (a -> Sample -> (a,Sample)) -> a -> Chunks -> Chunks
