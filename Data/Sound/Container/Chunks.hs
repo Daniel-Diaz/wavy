@@ -23,6 +23,7 @@ module Data.Sound.Container.Chunks (
   , (!) , (|>)
   , mapChunks
   , zipChunks , zipChunksAt
+  , zipChunksSame, zipChunksAtSame
   , chunkFromList , chunksFromList
   , joinChunks
   , trimChunks
@@ -200,6 +201,19 @@ zipChunksAt f = go 0
 zipChunks :: (Sample -> Sample -> Sample) -> Chunks -> Chunks -> Chunks
 {-# INLINE zipChunks #-}
 zipChunks = zipChunksAt . const
+
+-- | Same as 'zipChunksAt', but it assumes both input 'Chunks' have the same length.
+zipChunksAtSame :: (Word32 -> Sample -> Sample -> Sample) -> Chunks -> Chunks -> Chunks
+zipChunksAtSame f = go 0
+  where
+    go n (Chunk a l t) (Chunk a' _ t') = Chunk (A.izipWith (f . (+n) . fromIntegral) a a') l
+      $ go (n+chunkSize) t t'
+    go _ _ _ = Empty
+
+-- | Same as 'zipChunks', but it assumes both input 'Chunks' have the same length.
+zipChunksSame :: (Sample -> Sample -> Sample) -> Chunks -> Chunks -> Chunks
+{-# INLINE zipChunksSame #-}
+zipChunksSame = zipChunksAtSame . const
 
 -- | /O(length of the right argument)/. Balanced appending.
 appendChunks :: Chunks -> Chunks -> Chunks

@@ -84,7 +84,9 @@ s1@(S r l nc c) <+> s2@(S r' l' nc' c')
                                        ++ "Please, consider to change the sample rate of one of them."
  | nc /= nc' = soundError [s1,s2] "<+>" $ "Can't add two sounds with different number of channels. "
                                        ++ "Please, consider to change the number of channels in one of them."
- | otherwise = S r (max l l') nc $ zipChunks (zipSamples (+)) c c'
+ | otherwise = S r (max l l') nc $
+     if l == l' then zipChunksSame (zipSamples (+)) c c'
+                else zipChunks     (zipSamples (+)) c c'
 
 -- | /Parallelization of sounds/. Often refered as the /par/ operator.
 --   Applying this operator over two sounds will make them sound at the same
@@ -98,8 +100,8 @@ s1@(S r l nc c) <+> s2@(S r' l' nc' c')
 s1@(S r l nc c) <|> s2@(S r' l' nc' c')
  | r  /= r'  = soundError [s1,s2] "<|>" $ "Can't par sounds with different sample rates. "
                                        ++ "Please, consider to change the sample rate of one of them."
- | otherwise = let c'' = if l < l' then zipChunks appendSamples (c <> zeroChunks (l' - l) nc) c'
-                                   else zipChunks appendSamples c (c' <> zeroChunks (l-l') nc')
+ | otherwise = let c'' = if l < l' then zipChunksSame appendSamples (c <> zeroChunks (l'-l) nc) c'
+                                   else zipChunksSame appendSamples c (c' <> zeroChunks (l-l') nc')
                in  S r (max l l') (nc+nc') c''
 
 {- About the associativity of the sequencing operator.
@@ -227,7 +229,8 @@ parWithPan p s1@(S r1 n1 c1 ss1) s2@(S r2 n2 c2 ss2)
                                              ++ "Please, consider to change the sample rate of one of them."
  | c1 /= c2 = soundError [s1,s2] "parWithPan" $ "Can't par sounds with different number of channels. "
                                              ++ "Please, consider to change the number of channels in one of them."
- | otherwise = S r1 (max n1 n2) (c1*2) $ zipChunksAt f ss1 ss2
+ | otherwise = S r1 (max n1 n2) (c1*2) $ if n1 == n2 then zipChunksAtSame f ss1 ss2
+                                                     else zipChunksAt     f ss1 ss2
   where
    f i sx sy = let t  = sampleTime r1 i
                    q1 = (1 - p t) / 2
@@ -512,7 +515,7 @@ randomRs (x,y) = go
    go g = let (r,g') = range_random (x,y) g
           in  r : go g'
 
--- | Like 'noise', but allowing to choose the sample rate.
+-- | Like 'pnoise', but allowing to choose the sample rate.
 pnoiseR :: Word32 -- ^ Sample rate
         -> Time   -- ^ Duration (0~)
         -> Double -- ^ Amplitude (0~1)
@@ -527,7 +530,7 @@ pnoiseR r d a f sd = S r tn 1 cs
   tn = timeSample r d
   cs = chunksFromList tn $ cycle xs
 
--- | A randomly generated sound (mono) with frequency. Different seeds will generate
+-- | A randomly generated sound (mono) with frequency. Different seeds generate
 --   different sounds.
 pnoise :: Time   -- ^ Duration (0~)
        -> Double -- ^ Amplitude (0~1)
@@ -558,7 +561,7 @@ karplus :: Time   -- ^ Duration (0~)
 {-# INLINE karplus #-}
 karplus = karplusR 44100
 
--- | A randomly generated sound (mono) without frequency. Different seeds will generate
+-- | A randomly generated sound (mono) without frequency. Different seeds generate
 --   different sounds. For long sounds, a similar effect can be obtained using 'pnoise'
 --   with much better performance. While 'noise' create new random values for the entire
 --   length of the sound, 'pnoise' only creates a small portion that is repeated until
@@ -572,7 +575,7 @@ noise :: Time   -- ^ Duration (0~)
 {-# INLINE noise #-}
 noise = noiseR 44100
 
--- | Like 'totalRandom', but allowing to choose a custom sample rate.
+-- | Like 'noise', but allowing to choose a custom sample rate.
 noiseR :: Word32 -- ^ Sample rate
        -> Time   -- ^ Duration (0~)
        -> Double -- ^ Amplitude (0~1)
