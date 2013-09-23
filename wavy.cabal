@@ -37,9 +37,9 @@ Library
                , containers
                , AC-Random
   Exposed-modules:
+    Data.Sound.Core.Chunked
     Data.Sound
     Data.Sound.Internal
-    Data.Sound.Container.Chunks
     Data.Sound.WAVE
   GHC-Options: -Wall -O2
 

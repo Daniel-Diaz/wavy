@@ -18,7 +18,7 @@ module Data.Sound.Internal (
  ) where
 
 import Data.Word (Word32)
-import Data.Sound.Container.Chunks
+import Data.Sound.Core.Chunked
 import Data.List (unfoldr)
 import Control.DeepSeq
 import Data.Maybe (fromMaybe)
@@ -39,10 +39,10 @@ type Time = Double
 --
 --   They also support decoding, so you can also get a 'Sound' from an encoded data, possibly
 --   coming from an actual sound file.
-data Sound = S { rate     :: !Word32 -- ^ Sample rate.
-               , nSamples :: !Word32 -- ^ Number of samples.
-               , channels :: !Int    -- ^ Number of channels.
-               , schunks  ::  Chunks -- ^ Chunks storing the samples.
+data Sound = S { rate     :: !Word32  -- ^ Sample rate.
+               , nSamples :: !Word32  -- ^ Number of samples.
+               , channels :: !Int     -- ^ Number of channels.
+               , schunks  ::  Chunked -- ^ Sequence of samples.
                  }
 
 -- | Internal function to throw errors giving information about
@@ -116,7 +116,7 @@ sample s t = atSample (timeSample (rate s) t) s
 --
 mapSoundAt :: (Word32 -> Sample -> Sample)
           -> Sound -> Sound
-mapSoundAt f s = s { schunks = mapChunks f (schunks s) }
+mapSoundAt f s = s { schunks = mapChunked f (schunks s) }
 
 -- | Map a function over all samples in a given sound.
 --
@@ -146,7 +146,7 @@ fromFunction :: Word32           -- ^ Sample rate.
              -> (Time -> Sample) -- ^ Generator function.
              -> Sound            -- ^ Resulting sound.
 {-# NOINLINE fromFunction #-}
-fromFunction rt d (Just p) f = S rt n nc $ chunksFromList n $ cycle xs
+fromFunction rt d (Just p) f = S rt n nc $ chunkedFromList n $ cycle xs
  where
   n  = timeSample rt d
   -- Dealing with the period problem.
@@ -157,7 +157,7 @@ fromFunction rt d (Just p) f = S rt n nc $ chunksFromList n $ cycle xs
   basicList = fmap g [1..nP]
   addList   = fmap g [ nP + 1 .. nP + fromIntegral (numerator r) ]
   xs = concat (replicate (fromIntegral $ denominator r) basicList) ++ addList
-fromFunction rt d Nothing f = S rt n nc $ chunksFromList n $
+fromFunction rt d Nothing f = S rt n nc $ chunkedFromList n $
   unfoldr (\i -> if i > n then Nothing
                           else let y = g i
                                in  Just (y,i+1)) 1
@@ -170,6 +170,6 @@ fromFunction rt d Nothing f = S rt n nc $ chunksFromList n $
 --   with the given number of channels, and every channel filled with zeroes.
 zeroChunks :: Word32 -- ^ Number of samples.
            -> Int    -- ^ Number of channels.
-           -> Chunks
+           -> Chunked
 {-# INLINE zeroChunks #-}
-zeroChunks n nc = chunksFromList n $ repeat $ multiSample nc 0
+zeroChunks n nc = chunkedFromList n $ repeat $ multiSample nc 0

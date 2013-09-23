@@ -46,7 +46,7 @@ module Data.Sound (
 
 import Data.Monoid
 import Data.Sound.Internal
-import Data.Sound.Container.Chunks
+import Data.Sound.Core.Chunked
 -- Lists
 import Data.List (genericTake)
 -- Maybe
@@ -85,8 +85,8 @@ s1@(S r l nc c) <+> s2@(S r' l' nc' c')
  | nc /= nc' = soundError [s1,s2] "<+>" $ "Can't add two sounds with different number of channels. "
                                        ++ "Please, consider to change the number of channels in one of them."
  | otherwise = S r (max l l') nc $
-     if l == l' then zipChunksSame (zipSamples (+)) c c'
-                else zipChunks     (zipSamples (+)) c c'
+     if l == l' then zipChunkedSame (zipSamples (+)) c c'
+                else zipChunked     (zipSamples (+)) c c'
 
 -- | /Parallelization of sounds/. Often refered as the /par/ operator.
 --   Applying this operator over two sounds will make them sound at the same
@@ -100,8 +100,8 @@ s1@(S r l nc c) <+> s2@(S r' l' nc' c')
 s1@(S r l nc c) <|> s2@(S r' l' nc' c')
  | r  /= r'  = soundError [s1,s2] "<|>" $ "Can't par sounds with different sample rates. "
                                        ++ "Please, consider to change the sample rate of one of them."
- | otherwise = let c'' = if l < l' then zipChunksSame appendSamples (c <> zeroChunks (l'-l) nc) c'
-                                   else zipChunksSame appendSamples c (c' <> zeroChunks (l-l') nc')
+ | otherwise = let c'' = if l < l' then zipChunkedSame appendSamples (c <> zeroChunks (l'-l) nc) c'
+                                   else zipChunkedSame appendSamples c (c' <> zeroChunks (l-l') nc')
                in  S r (max l l') (nc+nc') c''
 
 {- About the associativity of the sequencing operator.
@@ -229,8 +229,8 @@ parWithPan p s1@(S r1 n1 c1 ss1) s2@(S r2 n2 c2 ss2)
                                              ++ "Please, consider to change the sample rate of one of them."
  | c1 /= c2 = soundError [s1,s2] "parWithPan" $ "Can't par sounds with different number of channels. "
                                              ++ "Please, consider to change the number of channels in one of them."
- | otherwise = S r1 (max n1 n2) (c1*2) $ if n1 == n2 then zipChunksAtSame f ss1 ss2
-                                                     else zipChunksAt     f ss1 ss2
+ | otherwise = S r1 (max n1 n2) (c1*2) $ if n1 == n2 then zipChunkedAtSame f ss1 ss2
+                                                     else zipChunkedAt     f ss1 ss2
   where
    f i sx sy = let t  = sampleTime r1 i
                    q1 = (1 - p t) / 2
@@ -297,7 +297,7 @@ trimIndex :: Word32 -- ^ Start index
 trimIndex n0 n1 s@(S r n c ss)
   | n0 >= n = S r 0 c mempty
   | n1 >= n = trimIndex n0 (n-1) s
-  | otherwise = S r (n1-n0) c $ trimChunks n0 n1 ss
+  | otherwise = S r (n1-n0) c $ trimChunked n0 n1 ss
 
 -- ECHOING
 
@@ -535,7 +535,7 @@ pnoiseR r d a f sd = S r tn 1 cs
   n = timeSample r $ recip f
   xs = genericTake n $ fmap monoSample $ randomRs (-a,a) $ seed [sd]
   tn = timeSample r d
-  cs = chunksFromList tn $ cycle xs
+  cs = chunkedFromList tn $ cycle xs
 
 -- | A randomly generated sound (mono) with frequency. Different seeds generate
 --   different sounds.
@@ -589,7 +589,7 @@ noiseR :: Word32 -- ^ Sample rate
        -> Word32 -- ^ Random seed
        -> Sound
 {-# INLINE noiseR #-}
-noiseR r d a sd = S r n 1 $ chunksFromList n xs
+noiseR r d a sd = S r n 1 $ chunkedFromList n xs
   where
     n  = timeSample r d
     xs = fmap monoSample $ randomRs (-a,a) $ seed [sd]

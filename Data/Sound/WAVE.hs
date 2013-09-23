@@ -38,8 +38,8 @@ import Data.Binary.Get
 -- Sound interface.
 import Data.Sound.Internal
 
--- Chunks interface.
-import Data.Sound.Container.Chunks
+-- Chunked interface.
+import Data.Sound.Core.Chunked
 
 -- | Lazy bytestrings are used for encoding/decoding.
 type ByteString = B.ByteString
@@ -70,7 +70,7 @@ data Format = Format {
 -- | The actual waveform data.
 data WAVEData = WData {
    dataSize :: Word32
- , samples  :: Chunks
+ , samples  :: Chunked
  }
 
 -- ENCODING
@@ -119,7 +119,7 @@ writeData d bd =
              24 -> error "wavy: 24-bits per sample is still not supported."
              32 -> putWord32le . cast32
              _  -> error $ "wavy: Unsupported bits-per-sample: " ++ show bd ++ "."
-    in  linkedFoldChunks (foldrSample (\x xs -> f x <> xs) mempty) (samples d)
+    in  linkedFoldChunked (foldrSample (\x xs -> f x <> xs) mempty) (samples d)
 
 -- DECODING
 
@@ -160,7 +160,7 @@ decodeChunks :: Word16 -- ^ Bits per sample.
              -> Word16 -- ^ Number of channels.
              -> Int    -- ^ Number of chunks.
              -> Int    -- ^ Remainder chunk.
-             -> ByteString -> Chunks 
+             -> ByteString -> Chunked
 decodeChunks bd nc q r lb = go q lb
  where
   go 0 b =
@@ -169,7 +169,7 @@ decodeChunks bd nc q r lb = go q lb
     _ -> mempty
   go n b =
    case runGetOrFail (getChunk bd nc chunkSizeInt) b of
-    Right (b',_,c) -> joinChunks c $ go (n-1) b'
+    Right (b',_,c) -> joinChunked c $ go (n-1) b'
     _ -> mempty
 
 getDescriptor :: Get Descriptor
@@ -194,7 +194,7 @@ getFormat =
 getChunk :: Word16 -- ^ Bits per sample.
          -> Word16 -- ^ Number of channels.
          -> Int    -- ^ Chunk size (@< chunkSize@).
-         -> Get Chunks
+         -> Get Chunked
 getChunk bd nc cs =
  let ncI :: Int
      ncI = fromIntegral nc
@@ -205,7 +205,7 @@ getChunk bd nc cs =
        24 -> fail "24-bits per sample is not supported yet."
        32 -> sampleFromList . fmap decast32 <$> replicateM ncI getWord32le
        _  -> fail $ "Wavy: Unsupported bits-per-sample: " ++ show bd ++ "."
- in fmap (\xs -> chunk (chunkFromList xs) (fromIntegral cs) mempty) $ replicateM cs getSample
+ in fmap (\xs -> Chunk (chunkFromList xs) (fromIntegral cs) mempty) $ replicateM cs getSample
 
 getDataInfo :: Get Word32
 getDataInfo = matchBytes [100,97,116,97] *> getWord32le
