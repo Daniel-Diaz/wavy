@@ -272,7 +272,14 @@ right s = mapSound (mapSample $ const 0) s <|> s
 loop :: Int -> Sound -> Sound
 loop n = foldr1 (<.>) . replicate n
 
+{-# RULES
+"sound/mapTrim" forall t0 t1 f s. trim t0 t1 (mapSound f s) = mapSound f (trim t0 t1 s)
+  #-}
+
 -- | Extract a continous segment of the sound.
+--
+-- > t0 t1 (mapSound f s) = mapSound f (trim t0 t1 s)
+--
 trim :: Time  -- ^ Start time
      -> Time  -- ^ End time
      -> Sound
