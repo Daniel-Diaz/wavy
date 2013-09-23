@@ -278,7 +278,7 @@ loop n = foldr1 (<.>) . replicate n
 
 -- | Extract a continous segment of the sound.
 --
--- > t0 t1 (mapSound f s) = mapSound f (trim t0 t1 s)
+-- > trim t0 t1 (mapSound f s) = mapSound f (trim t0 t1 s)
 --
 trim :: Time  -- ^ Start time
      -> Time  -- ^ End time

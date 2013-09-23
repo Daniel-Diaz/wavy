@@ -159,18 +159,18 @@ decode b =
 decodeChunks :: Word16 -- ^ Bits per sample.
              -> Word16 -- ^ Number of channels.
              -> Int    -- ^ Number of chunks.
-             -> Int    -- ^ Remainder chunk.
+             -> Int    -- ^ Length of remainder chunk.
              -> ByteString -> Chunked
 decodeChunks bd nc q r lb = go q lb
  where
   go 0 b =
    case runGetOrFail (getChunk bd nc r) b of
-    Right (_,_,c) -> c
-    _ -> mempty
+    Right (_,_,a) ->  Chunk a (fromIntegral r) Empty
+    _ -> Empty
   go n b =
    case runGetOrFail (getChunk bd nc chunkSizeInt) b of
-    Right (b',_,c) -> joinChunked c $ go (n-1) b'
-    _ -> mempty
+    Right (b',_,a) -> Chunk a chunkSize $ go (n-1) b'
+    _ -> Empty
 
 getDescriptor :: Get Descriptor
 getDescriptor =
@@ -193,8 +193,8 @@ getFormat =
 
 getChunk :: Word16 -- ^ Bits per sample.
          -> Word16 -- ^ Number of channels.
-         -> Int    -- ^ Chunk size (@< chunkSize@).
-         -> Get Chunked
+         -> Int    -- ^ Chunk size (@<= chunkSize@).
+         -> Get Array
 getChunk bd nc cs =
  let ncI :: Int
      ncI = fromIntegral nc
@@ -205,7 +205,7 @@ getChunk bd nc cs =
        24 -> fail "24-bits per sample is not supported yet."
        32 -> sampleFromList . fmap decast32 <$> replicateM ncI getWord32le
        _  -> fail $ "Wavy: Unsupported bits-per-sample: " ++ show bd ++ "."
- in fmap (\xs -> Chunk (chunkFromList xs) (fromIntegral cs) mempty) $ replicateM cs getSample
+ in fmap chunkFromList $ replicateM cs getSample
 
 getDataInfo :: Get Word32
 getDataInfo = matchBytes [100,97,116,97] *> getWord32le

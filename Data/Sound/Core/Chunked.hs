@@ -14,7 +14,7 @@ module Data.Sound.Core.Chunked (
   , multiplySample
   , zipSamples
     -- * Chunked
-  , Chunked (..)
+  , Array, Chunked (..)
     -- ** Chunk size
     -- $csize
   , chunkSize , chunkSizeInt
@@ -25,7 +25,6 @@ module Data.Sound.Core.Chunked (
   , zipChunked , zipChunkedAt
   , zipChunkedSame, zipChunkedAtSame
   , chunkFromList , chunkedFromList
-  , joinChunked
   , trimChunked
     -- * Folds
   , foldrChunked
@@ -50,6 +49,7 @@ import Control.DeepSeq
 newtype Sample = Sample (U.Vector Double)
 
 monoSample :: Double -> Sample
+{-# INLINE monoSample #-}
 monoSample = Sample . U.singleton
 
 appendSamples :: Sample -> Sample -> Sample
@@ -57,6 +57,7 @@ appendSamples (Sample v) (Sample w) = Sample $ v U.++ w
 
 -- | Create a 'Sample' with a given number of channels.
 multiSample :: Int -> Double -> Sample
+{-# INLINE multiSample #-}
 multiSample n x = Sample $ U.replicate n x
 
 sampleLength :: Sample -> Int
@@ -69,6 +70,7 @@ foldrSample :: (Double -> r -> r) -> r -> Sample -> r
 foldrSample f e (Sample v) = U.foldr f e v
 
 mapSample :: (Double -> Double) -> Sample -> Sample
+{-# INLINE mapSample #-}
 mapSample f (Sample v) = Sample $ U.map f v
 
 multiplySample :: Int -> Sample -> Sample
@@ -77,6 +79,7 @@ multiplySample n (Sample v) =
   in  Sample $ U.generate (n * l) $ \i -> U.unsafeIndex v $ mod i l
 
 zipSamples :: (Double -> Double -> Double) -> Sample -> Sample -> Sample
+{-# INLINE zipSamples #-}
 zipSamples f (Sample v) (Sample w) = Sample $ U.zipWith f v w
 
 type Array = A.Vector Sample
@@ -121,14 +124,14 @@ infixr 2 !
 (!) :: Chunked -> Word32 -> Maybe Sample
 (Chunk a l t) ! n = if n < l then a A.!? fromIntegral n
                              else t ! (n-l)
-Empty ! _ = Nothing
+_ ! _ = Nothing
 
 -- | /O(n/\/'chunkSize'/)/. Add a sample at the end of the sample chunks.
 (|>) :: Chunked -> Sample -> Chunked
 (Chunk a l t) |> x = if l == chunkSize
                         then Chunk a l $ t |> x
                         else Chunk (A.snoc a x) (l+1) t
-Empty |> x = Chunk (A.singleton x) 1 Empty
+_ |> x = Chunk (A.singleton x) 1 Empty
 
 {-# RULES
 "chunks/map" forall f g c. mapChunked f (mapChunked g c) = mapChunked (\i x -> g i (f i x)) c
@@ -158,7 +161,6 @@ foldrChunked f e = go
 foldChunked :: Monoid m => (Sample -> m) -> Chunked -> m
 foldChunked f = go
   where
-    -- go (Chunk a _ _) | deepseq a False = undefined
     go (Chunk a _ t) = foldArray f a <> go t
     go _ = mempty
 
@@ -166,7 +168,6 @@ foldChunked f = go
 linkedFoldChunked :: Monoid m => (Sample -> m) -> Chunked -> [m]
 linkedFoldChunked f = go
   where
-    -- go (Chunk a _ _) | deepseq a False = undefined
     go (Chunk a _ t) = foldArray f a : go t
     go _ = []
 
@@ -198,6 +199,7 @@ zipChunked = zipChunkedAt . const
 
 -- | Same as 'zipChunkedAt', but it assumes both input 'Chunked' have the same length.
 zipChunkedAtSame :: (Word32 -> Sample -> Sample -> Sample) -> Chunked -> Chunked -> Chunked
+{-# INLINE zipChunkedAtSame #-}
 zipChunkedAtSame f = go 0
   where
     go n (Chunk a l t) (Chunk a' _ t') = Chunk (A.izipWith (f . (+n) . fromIntegral) a a') l
@@ -252,11 +254,6 @@ chunkedFromList n ss = h (1,ss)
   chunkSizeI :: Int
   chunkSizeI = fromIntegral chunkSize
   (q,r) = quotRem n chunkSize
-
--- | Join two chunks without checking the 'Chunked' properties.
-joinChunked :: Chunked -> Chunked -> Chunked
-joinChunked (Chunk a l t) c = Chunk a l $ joinChunked t c
-joinChunked _ c = c
 
 trimChunked :: Word32 -> Word32 -> Chunked -> Chunked
 trimChunked n0 n1 (Chunk a l t)
