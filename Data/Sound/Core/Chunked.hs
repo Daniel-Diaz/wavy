@@ -25,7 +25,7 @@ module Data.Sound.Core.Chunked (
   , zipChunked , zipChunkedAt
   , zipChunkedSame, zipChunkedAtSame
   , chunkFromList , chunkedFromList
-  , trimChunked
+  , trimChunked, reverseChunked
     -- * Folds
   , foldrChunked
   , foldChunked , linkedFoldChunked
@@ -84,7 +84,16 @@ zipSamples f (Sample v) (Sample w) = Sample $ U.zipWith f v w
 
 type Array = A.Vector Sample
 
--- | A chunked sequence of samples.
+-- | A chunked sequence of samples. A valid 'Chunked' value is determined
+--   by the following laws.
+--
+-- * A value of type 'Chunked' is either 'Empty' or 'Chunk'@ a l t@, where
+--   @a@ is an 'Array', @l@ is a 'Word32' value with the /length/ of @a@
+--   and @t@ is a /valid/ 'Chunked' value (the /tail/).
+--
+-- * If @c == @'Chunk'@ a l t@ is a 'Chunked' value, then @l <= @'chunkSize'.
+--   If @l < @'chunkSize', then @t == @'Empty'.
+--
 data Chunked =
    Empty
  | Chunk {-# UNPACK #-} !Array  -- Array of samples
@@ -264,6 +273,10 @@ trimChunked n0 n1 (Chunk a l t)
   | otherwise = Chunk (A.drop (fromIntegral n0) a) (l-n0) Empty
              <> trimChunked 0 (n1-l) t
 trimChunked _ _ _ = Empty
+
+reverseChunked :: Chunked -> Chunked
+reverseChunked (Chunk a l t) = reverseChunked t <> Chunk (A.reverse a) l Empty
+reverseChunked _ = Empty
 
 -- | Causal traversal.
 causaltr :: (a -> Sample -> (a,Sample)) -> a -> Chunked -> Chunked

@@ -41,7 +41,7 @@ module Data.Sound (
    -- * Effects
  , echo
    -- * Utils
- , loop, trim
+ , loop, trim, backwards
    ) where
 
 import Data.Monoid
@@ -298,6 +298,10 @@ trimIndex n0 n1 s@(S r n c ss)
   | n0 >= n = S r 0 c mempty
   | n1 >= n = trimIndex n0 (n-1) s
   | otherwise = S r (n1-n0) c $ trimChunked n0 n1 ss
+
+-- | Reverse a sound.
+backwards :: Sound -> Sound
+backwards s = s { schunks = reverseChunked $ schunks s }
 
 -- ECHOING
 
