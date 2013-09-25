@@ -299,7 +299,11 @@ trimIndex n0 n1 s@(S r n c ss)
   | n1 >= n = trimIndex n0 (n-1) s
   | otherwise = S r (n1-n0) c $ trimChunked n0 n1 ss
 
--- | Reverse a sound.
+-- | Reverse a sound. Note that the entire sound is required
+--   to be kept in memory to perform the reversion, since the
+--   /first/ sample of the reversed sound is the /last/ sample
+--   of the original. But to get the last sample the evaluation
+--   of all the previous samples is required.
 backwards :: Sound -> Sound
 backwards s = s { schunks = reverseChunked $ schunks s }
 

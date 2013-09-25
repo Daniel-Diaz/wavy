@@ -41,6 +41,8 @@ Library
     Data.Sound
     Data.Sound.Internal
     Data.Sound.WAVE
+    --
+    Data.Sound.Analysis
   GHC-Options: -Wall -O2
 
 benchmark wavy-bench-synth

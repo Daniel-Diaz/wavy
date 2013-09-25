@@ -88,16 +88,19 @@ type Array = A.Vector Sample
 --   by the following laws.
 --
 -- * A value of type 'Chunked' is either 'Empty' or 'Chunk'@ a l t@, where
---   @a@ is an 'Array', @l@ is a 'Word32' value with the /length/ of @a@
+--   @a@ is an 'Array' of 'Sample's, @l@ is a 'Word32' value with the /length/ of @a@
 --   and @t@ is a /valid/ 'Chunked' value (the /tail/).
 --
 -- * If @c == @'Chunk'@ a l t@ is a 'Chunked' value, then @l <= @'chunkSize'.
 --   If @l < @'chunkSize', then @t == @'Empty'.
 --
+-- The evaluation of a 'Chunked' sequence is done by chunks. If a non-empty
+-- 'Chunked' sequence is reduced to WHNF, then the first chunk of data is
+-- evaluated, while a pointer to the /tail/ is kept lazy.
 data Chunked =
    Empty
- | Chunk {-# UNPACK #-} !Array  -- Array of samples
-         {-# UNPACK #-} !Word32 -- Length of the array
+ | Chunk {-# UNPACK #-} !Array   -- Array of samples
+         {-# UNPACK #-} !Word32  -- Length of the array
                          Chunked -- Tail of chunks
 
 -- | Chunk size should be even, so @chunkSize = 2 * halfChunkSize@.
