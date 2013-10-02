@@ -7,7 +7,8 @@ module Data.Sound.Analysis (
     -- * N-th roots abelian group
   , zeta, basis, normalBasis
     -- * Fourier
-  , fourierCoefs
+  , fourierTransform
+  , fourierInverse
   ) where
 
 -- import Data.Word
@@ -38,14 +39,16 @@ normalBasis :: Int -- ^ Modulo
 normalBasis n = fmap (A.map (/(sqrt $ fromIntegral n))) $ basis n
 
 -- | Fourier coefficients of a complex-valued function on Z(N).
-fourierCoefs :: Vector -> Vector
-fourierCoefs f = A.generate n $ \i -> recip (fromIntegral n) * hermitian f (basis n !! i)
+--   Finite Fourier Transform (FFT).
+fourierTransform :: Vector -> Vector
+fourierTransform f = A.generate n $ \i -> recip (fromIntegral n) * hermitian f (basis n !! i)
   where
     n = A.length f
 
 -- | Build a complex-valued function on Z(N) from its Fourier coefficients.
-fourierBuild :: Vector -> Vector
-fourierBuild cs = A.generate n $ \k -> A.sum $ A.zipWith (*) cs $ basis n !! k
+--   Inverse FFT.
+fourierInverse :: Vector -> Vector
+fourierInverse cs = A.generate n $ \k -> A.sum $ A.zipWith (*) cs $ basis n !! k
   where
     n = A.length cs
 

@@ -12,10 +12,10 @@ module Data.Sound (
    -- * Wave generators
    -- ** Basic wave generators
  , zeroSound , zeroSoundR
- , sine      , sineR
- , sawtooth  , sawtoothR
- , square    , squareR
- , triangle  , triangleR
+ , sine      , sineWith     , sineRaw
+ , sawtooth  , sawtoothWith , sawtoothRaw
+ , square    , squareWith   , squareRaw
+ , triangle  , triangleWith , triangleRaw
    -- ** Variable Frequency Basic wave generators
  , sineV     , sineVR
    -- ** Functional wave generators
@@ -198,7 +198,7 @@ addAt t s1 s2 = addSilenceBeg t s1 <+> s2
 velocity :: (Time -> Double) -- ^ @0 <= v t <= 1@.
          -> Sound
          -> Sound
-{-# INLINE velocity #-}
+{-# INLINE[1] velocity #-}
 velocity v s = mapSoundAt (\i -> mapSample $ \x -> v (f i) * x) s
  where
   r = rate s
@@ -396,20 +396,33 @@ zeroSound :: Time -> Sound
 {-# INLINE zeroSound #-}
 zeroSound = zeroSoundR 44100
 
--- | Like 'sine', but allowing to choose a custom sample rate.
-sineR :: Word32 -- ^ Sample rate
-      -> Time   -- ^ Duration (0~)
-      -> Double -- ^ Amplitude (0~1)
-      -> Time   -- ^ Frequency (Hz)
-      -> Time   -- ^ Phase
-      -> Sound
-{-# INLINE sineR #-}
-sineR r d a f p = fromFunction r d (Just $ 1/f) $
+sineRaw :: Word32 -- ^ Sample rate
+        -> Time   -- ^ Duration (0~)
+        -> Double -- ^ Amplitude (0~1)
+        -> Time   -- ^ Frequency (Hz)
+        -> Time   -- ^ Phase
+        -> Sound
+{-# INLINE sineRaw #-}
+sineRaw r d a f p = fromFunction r d (Just $ 1/f) $
   let pi2f = pi2*f
   in  \t ->
         let s :: Time
             s = pi2f*t + p
         in  monoSample $ a * sin s
+
+-- | Like 'sine', but allowing to choose a custom sample rate.
+sineWith :: Word32 -- ^ Sample rate
+         -> Time   -- ^ Duration (0~)
+         -> Double -- ^ Amplitude (0~1)
+         -> Time   -- ^ Frequency (Hz)
+         -> Time   -- ^ Phase
+         -> Sound
+{-# INLINE sineWith #-}
+sineWith r d a f = sineRaw r d' a f
+  where
+    q = recip $ 2*f
+    (n,rm) = properFraction (d/q) :: (Int,Double)
+    d' = if rm < 0.001 then d else fromIntegral (n+1) * q
 
 -- | Create a sine wave with the given duration, amplitude, frequency and phase (mono).
 --
@@ -420,7 +433,7 @@ sine :: Time   -- ^ Duration (0~)
      -> Time   -- ^ Phase
      -> Sound
 {-# INLINE sine #-}
-sine = sineR 44100
+sine = sineWith 44100
 
 -- | Like 'sineV', but allowing to choose the sample rate.
 sineVR :: Word32 -- ^ Sample rate
@@ -447,17 +460,30 @@ sineV :: Time   -- ^ Duration (0~)
 sineV = sineVR 44100
 
 -- | Like 'sawtooth', but allowing to choose the sample rate.
-sawtoothR :: Word32 -- ^ Sample rate
-          -> Time   -- ^ Duration (0~)
-          -> Double -- ^ Amplitude (0~1)
-          -> Time   -- ^ Frequency (Hz)
-          -> Time   -- ^ Phase
-          -> Sound
-{-# INLINE sawtoothR #-}
-sawtoothR r d a f p = fromFunction r d (Just $ 1/f) $ \t ->
+sawtoothRaw :: Word32 -- ^ Sample rate
+            -> Time   -- ^ Duration (0~)
+            -> Double -- ^ Amplitude (0~1)
+            -> Time   -- ^ Frequency (Hz)
+            -> Time   -- ^ Phase
+            -> Sound
+{-# INLINE sawtoothRaw #-}
+sawtoothRaw r d a f p = fromFunction r d (Just $ 1/f) $ \t ->
  let s :: Time
      s = f*t + p
  in  monoSample $ a * (2 * decimals s - 1)
+
+sawtoothWith :: Word32 -- ^ Sample rate
+             -> Time   -- ^ Duration (0~)
+             -> Double -- ^ Amplitude (0~1)
+             -> Time   -- ^ Frequency (Hz)
+             -> Time   -- ^ Phase
+             -> Sound
+{-# INLINE sawtoothWith #-}
+sawtoothWith r d a f = sawtoothRaw r d' a f
+  where
+    q  = recip f
+    (n,rm) = properFraction (d/q) :: (Int,Double)
+    d' = if rm < 0.001 then d else fromIntegral (n+1) * q
 
 -- | Create a sawtooth wave with the given duration, amplitude, frequency and phase (mono).
 --
@@ -468,17 +494,30 @@ sawtooth :: Time   -- ^ Duration (0~)
          -> Time   -- ^ Phase
          -> Sound
 {-# INLINE sawtooth #-}
-sawtooth = sawtoothR 44100
+sawtooth = sawtoothWith 44100
 
 -- | Like 'square', but allowing to choose the sample rate.
-squareR :: Word32 -- ^ Sample rate
-        -> Time   -- ^ Duration (0~)
-        -> Double -- ^ Amplitude (0~1)
-        -> Time   -- ^ Frequency (Hz)
-        -> Time   -- ^ Phase
-        -> Sound
-{-# INLINE squareR #-}
-squareR r d a f p = fromFunction r d (Just $ 1/f) $ \t ->
+squareWith :: Word32 -- ^ Sample rate
+           -> Time   -- ^ Duration (0~)
+           -> Double -- ^ Amplitude (0~1)
+           -> Time   -- ^ Frequency (Hz)
+           -> Time   -- ^ Phase
+           -> Sound
+{-# INLINE squareWith #-}
+squareWith r d a f = squareRaw r d' a f
+  where
+    q  = recip f
+    (n,rm) = properFraction (d/q) :: (Int,Double)
+    d' = if rm < 0.001 then d else fromIntegral (n+1) * q
+
+squareRaw :: Word32 -- ^ Sample rate
+          -> Time   -- ^ Duration (0~)
+          -> Double -- ^ Amplitude (0~1)
+          -> Time   -- ^ Frequency (Hz)
+          -> Time   -- ^ Phase
+          -> Sound
+{-# INLINE squareRaw #-}
+squareRaw r d a f p = fromFunction r d (Just $ 1/f) $ \t ->
  let s :: Time
      s = f*t + p
      h :: Time -> Double
@@ -494,20 +533,33 @@ square :: Time   -- ^ Duration (0~)
        -> Time   -- ^ Phase
        -> Sound
 {-# INLINE square #-}
-square = squareR 44100
+square = squareWith 44100
 
--- | As in 'triangle', but allowing to choose the sample rate.
-triangleR :: Word32 -- ^ Sample rate
-          -> Time   -- ^ Duration (0~)
-          -> Double -- ^ Amplitude (0~1)
-          -> Time   -- ^ Frequency (Hz)
-          -> Time   -- ^ Phase
-          -> Sound
-{-# INLINE triangleR #-}
-triangleR r d a f p = fromFunction r d (Just $ 1/f) $ \t ->
+triangleRaw :: Word32 -- ^ Sample rate
+            -> Time   -- ^ Duration (0~)
+            -> Double -- ^ Amplitude (0~1)
+            -> Time   -- ^ Frequency (Hz)
+            -> Time   -- ^ Phase
+            -> Sound
+{-# INLINE triangleRaw #-}
+triangleRaw r d a f p = fromFunction r d (Just $ 1/f) $ \t ->
  let s :: Time
      s = f*t + p
  in  monoSample $ a * (1 - 4 * abs (timeFloor (s + 0.25) - s + 0.25))
+
+-- | As in 'triangle', but allowing to choose the sample rate.
+triangleWith :: Word32 -- ^ Sample rate
+             -> Time   -- ^ Duration (0~)
+             -> Double -- ^ Amplitude (0~1)
+             -> Time   -- ^ Frequency (Hz)
+             -> Time   -- ^ Phase
+             -> Sound
+{-# INLINE triangleWith #-}
+triangleWith r d a f = triangleRaw r d' a f
+  where
+    q  = recip f
+    (n,rm) = properFraction (d/q) :: (Int,Double)
+    d' = if rm < 0.001 then d else fromIntegral (n+1) * q
 
 -- | Create a triange wave with the given duration, amplitude, frequency and phase (mono).
 --
@@ -518,7 +570,7 @@ triangle :: Time   -- ^ Duration (0~)
          -> Time   -- ^ Phase
          -> Sound
 {-# INLINE triangle #-}
-triangle = triangleR 44100
+triangle = triangleWith 44100
 
 -------------------
 -- OTHER SYNTHS

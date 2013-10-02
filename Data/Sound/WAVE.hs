@@ -1,4 +1,6 @@
 
+{-# LANGUAGE FlexibleContexts #-}
+
 -- | PCM WAVE encoding.
 module Data.Sound.WAVE (
    -- * Types
@@ -34,6 +36,7 @@ import Control.Monad
 -- Binary encoding/decoding interface.
 import Data.Binary.Builder
 import Data.Binary.Get
+import Data.Binary.IEEE754
 
 -- Sound interface.
 import Data.Sound.Internal
@@ -244,7 +247,8 @@ decast16 x_ = if x < 0 then x / half16
 
 -- Too slow!
 cast32 :: Double -> Word32
-cast32 x = fromIntegral . (truncate :: Double -> Int32) $ half32 * x
+-- cast32 x = fromIntegral . (truncate :: Double -> Int32) $ half32 * x
+cast32 = floatToWord . (realToFrac :: Double -> Float)
 
 decast32 :: Word32 -> Double
 decast32 x = (/half32) . fromIntegral . (fromIntegral :: Word32 -> Int32) $ x

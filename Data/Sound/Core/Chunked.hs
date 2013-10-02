@@ -19,17 +19,19 @@ module Data.Sound.Core.Chunked (
     -- $csize
   , chunkSize , chunkSizeInt
   , halfChunkSize
-    -- * Functions
+    -- ** Vectors
+  , vectorize
+    -- ** Functions
   , (!) , (|>)
   , mapChunked
   , zipChunked , zipChunkedAt
   , zipChunkedSame, zipChunkedAtSame
   , chunkFromList , chunkedFromList
   , trimChunked, reverseChunked
-    -- * Folds
+    -- ** Folds
   , foldrChunked
   , foldChunked , linkedFoldChunked
-    -- * Traversals
+    -- ** Traversals
   , causaltr
   ) where
 
@@ -145,6 +147,12 @@ _ ! _ = Nothing
                         else Chunk (A.snoc a x) (l+1) t
 _ |> x = Chunk (A.singleton x) 1 Empty
 
+-- | Collapse a chunked sequence of samples into a single 'A.Vector'.
+vectorize :: Chunked -> A.Vector Sample
+vectorize (Chunk a _ Empty) = a
+vectorize (Chunk a _ t)     = a <> vectorize t
+vectorize Empty = mempty
+
 {-# RULES
 "chunks/map" forall f g c. mapChunked f (mapChunked g c) = mapChunked (\i x -> g i (f i x)) c
   #-}
@@ -197,7 +205,7 @@ zipChunkedAt f = go 0
                        in  if wi < lmin
                               then f (n+wi) (A.unsafeIndex a i) (A.unsafeIndex a' i)
                               else A.unsafeIndex maxa i
-         in  Chunk x lmax $ go (n+chunkSize) t t'
+         in  Chunk x lmax $ go (n+lmax) t t'
     go _ c Empty = c
     go _ _ c = c
 

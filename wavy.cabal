@@ -36,6 +36,7 @@ Library
                , vector
                , containers
                , AC-Random
+               , data-binary-ieee754
   Exposed-modules:
     Data.Sound.Core.Chunked
     Data.Sound
