@@ -42,6 +42,8 @@ module Data.Sound (
  , echo
    -- * Utils
  , loop, trim, backwards
+ , affineFunction
+ , linearFunction
    ) where
 
 import Data.Monoid
@@ -653,3 +655,19 @@ noiseR r d a sd = S r n 1 $ chunkedFromList n xs
   where
     n  = timeSample r d
     xs = fmap monoSample $ randomRs (-a,a) $ seed [sd]
+
+-- Misc
+
+-- | Build an affine function given two points of its graph.
+affineFunction :: (Double,Double) -> (Double,Double) -> Double -> Double
+affineFunction (a,b) (c,d) x = m*x + n
+  where
+    m = (d-b)/(c-a)
+    n = b - m*a
+
+-- | Build a linear function given a point of its graph, different from @(0,0)@.
+--
+-- > linearFunction = affineFunction (0,0)
+--
+linearFunction :: (Double,Double) -> Double -> Double
+linearFunction = affineFunction (0,0)
