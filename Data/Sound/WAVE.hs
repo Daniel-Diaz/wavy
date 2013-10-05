@@ -155,7 +155,7 @@ decode b =
        let bd = bitsPerSample fmt
            nc = numChannels fmt
            k = div (8*di) $ fromIntegral (bd*nc)
-           (q,r) = quotRem k chunkSize
+           (q,r) = quotRem k $ fromIntegral chunkSize
            cs = decodeChunks bd nc (fromIntegral q) (fromIntegral r) r3
        in  Right $ WAVE d fmt $ WData di cs
 
@@ -171,7 +171,7 @@ decodeChunks bd nc q r lb = go q lb
     Right (_,_,a) ->  Chunk a (fromIntegral r) Empty
     _ -> Empty
   go n b =
-   case runGetOrFail (getChunk bd nc chunkSizeInt) b of
+   case runGetOrFail (getChunk bd nc chunkSize) b of
     Right (b',_,a) -> Chunk a chunkSize $ go (n-1) b'
     _ -> Empty
 
@@ -261,35 +261,45 @@ fromSound :: Word16 -- ^ Bits per sample (bit depth).
 fromSound bd s = WAVE
    { descriptor = D $ 36 + sampleSize
    , format = Format
-      { formatSize = 16
+      { -- Word32
+        formatSize = 16
+        -- Word16
       , audioFormat = 1
+        -- Word16
       , numChannels = nch
+        -- Word32
       , sampleRate = sr
+        -- Word32
       , byteRate = sr * nch * div (fromIntegral bd) 8
+        -- Word16
       , blockAlign = nch * div bd 8
+        -- Word16
       , bitsPerSample = bd
       }
    , waveData = WData
-      { dataSize = sampleSize
+      { -- Word32
+        dataSize = sampleSize
+        -- Chunked
       , samples = schunks s
       }
    }
  where
-  sr = rate s
+  sr :: Word32
+  sr = fromIntegral $ rate s
   nch :: Num a => a
   nch = fromIntegral $ channels s
   sampleSize :: Word32
-  sampleSize = nSamples s * nch * div (fromIntegral bd) 8
+  sampleSize = fromIntegral (nSamples s) * nch * div (fromIntegral bd) 8
 
 -- | Makes a 'Sound' from a 'WAVE' data. You can get a 'WAVE'
 --   from a file using 'decodeFile' or simply 'decode'.
 toSound :: WAVE -> Sound
-toSound w = S srt (div (dataSize dat) $ nc * div bd 8) nc $ samples dat
+toSound w = S srt (fromIntegral $ div (dataSize dat) $ fromIntegral $ nc * div bd 8) nc $ samples dat
  where
   fmt = format w
   dat = waveData w
   --
-  bd = fromIntegral $ bitsPerSample fmt
+  bd = bitsPerSample fmt
   nc :: Num a => a
   nc = fromIntegral $ numChannels fmt
-  srt = sampleRate fmt
+  srt = fromIntegral $ sampleRate fmt

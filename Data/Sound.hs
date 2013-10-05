@@ -11,7 +11,7 @@ module Data.Sound (
 
    -- * Wave generators
    -- ** Basic wave generators
- , zeroSound , zeroSoundR
+ , zeroSound , zeroSoundWith
  , sine      , sineWith     , sineRaw
  , sawtooth  , sawtoothWith , sawtoothRaw
  , square    , squareWith   , squareRaw
@@ -49,8 +49,6 @@ module Data.Sound (
 import Data.Monoid
 import Data.Sound.Internal
 import Data.Sound.Core.Chunked
--- Lists
-import Data.List (genericTake)
 -- Maybe
 import Data.Maybe (catMaybes)
 -- Random
@@ -61,7 +59,7 @@ import qualified Data.Sequence as Seq
 -- | Add a silence at the beginning of a sound.
 addSilenceBeg :: Time -- ^ Duration of the silence.
               -> Sound -> Sound
-addSilenceBeg d s = multiply n (zeroSoundR r d) <.> s
+addSilenceBeg d s = multiply n (zeroSoundWith r d) <.> s
  where
   r = rate s
   n = channels s
@@ -69,7 +67,7 @@ addSilenceBeg d s = multiply n (zeroSoundR r d) <.> s
 -- | Add a silence at the end of a sound.
 addSilenceEnd :: Time -- ^ Duration of the silence.
               -> Sound -> Sound
-addSilenceEnd d s = s <.> multiply n (zeroSoundR r d)
+addSilenceEnd d s = s <.> multiply n (zeroSoundWith r d)
  where
   r = rate s
   n = channels s
@@ -250,7 +248,7 @@ parWithPan p s1@(S r1 n1 c1 ss1) s2@(S r2 n2 c2 ss2)
 pan :: (Time -> Double) -- ^ @-1 <= p t <= 1@.
     -> Sound
     -> Sound
-pan p s = parWithPan p s $ zeroSoundR (rate s) $ duration s
+pan p s = parWithPan p s $ zeroSoundWith (rate s) $ duration s
 
 -- | Move a sound completely to the left.
 left :: Sound -> Sound
@@ -292,8 +290,8 @@ trim t0 t1 s = trimIndex n0 n1 s
     n0 = timeSample r t0
     n1 = timeSample r t1
 
-trimIndex :: Word32 -- ^ Start index
-          -> Word32 -- ^ End index
+trimIndex :: Int -- ^ Start index
+          -> Int -- ^ End index
           -> Sound
           -> Sound
 trimIndex n0 n1 s@(S r n c ss)
@@ -315,7 +313,7 @@ backwards s = s { schunks = reverseChunked $ schunks s }
 --
 -- > echo 0 dec del s = s
 --
-echo :: Word32 -- ^ Repetitions. How many times the sound is repeated.
+echo :: Int    -- ^ Repetitions. How many times the sound is repeated.
      -> Double -- ^ Decay (@0 < decay < 1@). How fast the amplitude of the repetitions decays.
      -> Time   -- ^ Delay @0 < delay@. Time between repetitions.
      -> Sound  -- ^ Original sound.
@@ -326,7 +324,7 @@ echo n dec del s = s { schunks = causaltr f e $ schunks s }
     e = Seq.empty
     m = timeSample (rate s) del
     f past x =
-       ( let past' = if Seq.length past >= fromIntegral (n*m)
+       ( let past' = if Seq.length past >= n*m
                         then seqInit past
                         else past
          in  x Seq.<| past'
@@ -334,7 +332,7 @@ echo n dec del s = s { schunks = causaltr f e $ schunks s }
                        then Just $ mapSample (*q) $ Seq.index past (k-1)
                        else Nothing
                   | i <- [1 .. n]
-                  , let k = fromIntegral (i*m)
+                  , let k = i*m
                   , let q = dec ^ i
                     ]
          in  foldr1 (zipSamples (+)) $ x : catMaybes xs
@@ -385,9 +383,9 @@ decimals :: Time -> Time
 decimals = snd . (properFraction :: Time -> (Int,Time))
 
 -- | Like 'zeroSound', but allowing to choose a custom sample rate.
-zeroSoundR :: Word32 -> Time -> Sound
-{-# INLINE zeroSoundR #-}
-zeroSoundR r d = S r n 1 $ zeroChunks n 1
+zeroSoundWith :: Int -> Time -> Sound
+{-# INLINE zeroSoundWith #-}
+zeroSoundWith r d = S r n 1 $ zeroChunks n 1
  where
   n = timeSample r d
 
@@ -396,9 +394,9 @@ zeroSoundR r d = S r n 1 $ zeroChunks n 1
 -- <<http://i.imgur.com/BP5PFIY.png>>
 zeroSound :: Time -> Sound
 {-# INLINE zeroSound #-}
-zeroSound = zeroSoundR 44100
+zeroSound = zeroSoundWith 44100
 
-sineRaw :: Word32 -- ^ Sample rate
+sineRaw :: Int    -- ^ Sample rate
         -> Time   -- ^ Duration (0~)
         -> Double -- ^ Amplitude (0~1)
         -> Time   -- ^ Frequency (Hz)
@@ -413,7 +411,7 @@ sineRaw r d a f p = fromFunction r d (Just $ 1/f) $
         in  monoSample $ a * sin s
 
 -- | Like 'sine', but allowing to choose a custom sample rate.
-sineWith :: Word32 -- ^ Sample rate
+sineWith :: Int    -- ^ Sample rate
          -> Time   -- ^ Duration (0~)
          -> Double -- ^ Amplitude (0~1)
          -> Time   -- ^ Frequency (Hz)
@@ -438,7 +436,7 @@ sine :: Time   -- ^ Duration (0~)
 sine = sineWith 44100
 
 -- | Like 'sineV', but allowing to choose the sample rate.
-sineVR :: Word32 -- ^ Sample rate
+sineVR :: Int    -- ^ Sample rate
        -> Time   -- ^ Duration (0~)
        -> Double -- ^ Amplitude (0~1)
        -> (Time -> Time) -- ^ Frequency (Hz)
@@ -462,7 +460,7 @@ sineV :: Time   -- ^ Duration (0~)
 sineV = sineVR 44100
 
 -- | Like 'sawtooth', but allowing to choose the sample rate.
-sawtoothRaw :: Word32 -- ^ Sample rate
+sawtoothRaw :: Int    -- ^ Sample rate
             -> Time   -- ^ Duration (0~)
             -> Double -- ^ Amplitude (0~1)
             -> Time   -- ^ Frequency (Hz)
@@ -474,7 +472,7 @@ sawtoothRaw r d a f p = fromFunction r d (Just $ 1/f) $ \t ->
      s = f*t + p
  in  monoSample $ a * (2 * decimals s - 1)
 
-sawtoothWith :: Word32 -- ^ Sample rate
+sawtoothWith :: Int    -- ^ Sample rate
              -> Time   -- ^ Duration (0~)
              -> Double -- ^ Amplitude (0~1)
              -> Time   -- ^ Frequency (Hz)
@@ -499,7 +497,7 @@ sawtooth :: Time   -- ^ Duration (0~)
 sawtooth = sawtoothWith 44100
 
 -- | Like 'square', but allowing to choose the sample rate.
-squareWith :: Word32 -- ^ Sample rate
+squareWith :: Int    -- ^ Sample rate
            -> Time   -- ^ Duration (0~)
            -> Double -- ^ Amplitude (0~1)
            -> Time   -- ^ Frequency (Hz)
@@ -512,7 +510,7 @@ squareWith r d a f = squareRaw r d' a f
     (n,rm) = properFraction (d/q) :: (Int,Double)
     d' = if rm < 0.001 then d else fromIntegral (n+1) * q
 
-squareRaw :: Word32 -- ^ Sample rate
+squareRaw :: Int    -- ^ Sample rate
           -> Time   -- ^ Duration (0~)
           -> Double -- ^ Amplitude (0~1)
           -> Time   -- ^ Frequency (Hz)
@@ -537,7 +535,7 @@ square :: Time   -- ^ Duration (0~)
 {-# INLINE square #-}
 square = squareWith 44100
 
-triangleRaw :: Word32 -- ^ Sample rate
+triangleRaw :: Int    -- ^ Sample rate
             -> Time   -- ^ Duration (0~)
             -> Double -- ^ Amplitude (0~1)
             -> Time   -- ^ Frequency (Hz)
@@ -550,7 +548,7 @@ triangleRaw r d a f p = fromFunction r d (Just $ 1/f) $ \t ->
  in  monoSample $ a * (1 - 4 * abs (timeFloor (s + 0.25) - s + 0.25))
 
 -- | As in 'triangle', but allowing to choose the sample rate.
-triangleWith :: Word32 -- ^ Sample rate
+triangleWith :: Int    -- ^ Sample rate
              -> Time   -- ^ Duration (0~)
              -> Double -- ^ Amplitude (0~1)
              -> Time   -- ^ Frequency (Hz)
@@ -585,7 +583,7 @@ randomRs (x,y) = go
           in  r : go g'
 
 -- | Like 'pnoise', but allowing to choose the sample rate.
-pnoiseR :: Word32 -- ^ Sample rate
+pnoiseR :: Int    -- ^ Sample rate
         -> Time   -- ^ Duration (0~)
         -> Double -- ^ Amplitude (0~1)
         -> Time   -- ^ Frequency (Hz)
@@ -595,7 +593,7 @@ pnoiseR :: Word32 -- ^ Sample rate
 pnoiseR r d a f sd = S r tn 1 cs
  where
   n = timeSample r $ recip f
-  xs = genericTake n $ fmap monoSample $ randomRs (-a,a) $ seed [sd]
+  xs = take n $ fmap monoSample $ randomRs (-a,a) $ seed [sd]
   tn = timeSample r d
   cs = chunkedFromList tn $ cycle xs
 
@@ -610,7 +608,7 @@ pnoise :: Time   -- ^ Duration (0~)
 pnoise = pnoiseR 44100
 
 -- | Like 'karplus', but allowing to choose a custom sample rate.
-karplusR :: Word32 -- ^ Sample rate
+karplusR :: Int    -- ^ Sample rate
          -> Time   -- ^ Duration (0~)
          -> Double -- ^ Amplitude (0~1)
          -> Time   -- ^ Frequency (Hz)
@@ -645,7 +643,7 @@ noise :: Time   -- ^ Duration (0~)
 noise = noiseR 44100
 
 -- | Like 'noise', but allowing to choose a custom sample rate.
-noiseR :: Word32 -- ^ Sample rate
+noiseR :: Int    -- ^ Sample rate
        -> Time   -- ^ Duration (0~)
        -> Double -- ^ Amplitude (0~1)
        -> Word32 -- ^ Random seed

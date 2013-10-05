@@ -17,7 +17,7 @@ module Data.Sound.Core.Chunked (
   , Array, Chunked (..)
     -- ** Chunk size
     -- $csize
-  , chunkSize , chunkSizeInt
+  , chunkSize
   , halfChunkSize
     -- ** Vectors
   , vectorize
@@ -35,7 +35,6 @@ module Data.Sound.Core.Chunked (
   , causaltr
   ) where
 
-import Data.Word
 import qualified Data.Vector as A
 import qualified Data.Vector.Unboxed as U
 --
@@ -102,17 +101,13 @@ type Array = A.Vector Sample
 data Chunked =
    Empty
  | Chunk {-# UNPACK #-} !Array   -- Array of samples
-         {-# UNPACK #-} !Word32  -- Length of the array
+         {-# UNPACK #-} !Int     -- Length of the array
                          Chunked -- Tail of chunks
 
 -- | Chunk size should be even, so @chunkSize = 2 * halfChunkSize@.
 --   Current value is @22050@.
-chunkSize :: Word32
+chunkSize :: Int
 chunkSize = 22050
-
--- | A variant of 'chunkSize' of type 'Int'.
-chunkSizeInt :: Int
-chunkSizeInt = fromIntegral chunkSize
 
 -- * About the Chunk Size
 
@@ -128,14 +123,14 @@ chunks of half second. However, this is just a provisional value.
 -- | > halfChunkSize = div chunkSize 2
 --
 --  Currently unused.
-halfChunkSize :: Word32
+halfChunkSize :: Int
 halfChunkSize = div chunkSize 2
 
 infixr 2 !
 
 -- | /O(n/\/'chunkSize'/)/. Extract an element from the sample chunks.
 --   Index starts at zero.
-(!) :: Chunked -> Word32 -> Maybe Sample
+(!) :: Chunked -> Int -> Maybe Sample
 (Chunk a l t) ! n = if n < l then a A.!? fromIntegral n
                              else t ! (n-l)
 _ ! _ = Nothing
@@ -159,10 +154,10 @@ vectorize Empty = mempty
 
 -- | /O(n)/. Map every element of the sample chunks, using a function that
 --   depends on the sample index.
-mapChunked :: (Word32 -> Sample -> Sample) -> Chunked -> Chunked
+mapChunked :: (Int -> Sample -> Sample) -> Chunked -> Chunked
 mapChunked f = go 0
  where
-  go n (Chunk a l t) = Chunk (A.imap (f . (+n) . fromIntegral) a) l $ go (n+l) t
+  go n (Chunk a l t) = Chunk (A.imap (f . (+n)) a) l $ go (n+l) t
   go _ _ = Empty
 
 -- FOLDS --
@@ -195,16 +190,15 @@ linkedFoldChunked f = go
 -- Balanced chunks make other operations (like zipping) more efficient.
 
 -- | /O(min n m)/. Zip over balanced chunks. A parameter of the current index is supplied.
-zipChunkedAt :: (Word32 -> Sample -> Sample -> Sample) -> Chunked -> Chunked -> Chunked
+zipChunkedAt :: (Int -> Sample -> Sample -> Sample) -> Chunked -> Chunked -> Chunked
 zipChunkedAt f = go 0
   where
     go n (Chunk a l t) (Chunk a' l' t') =
          let (lmin,lmax,maxa) = if l <= l' then (l,l',a') else (l',l,a)
-             x = A.generate (fromIntegral lmax) $
-                 \i -> let wi = fromIntegral i
-                       in  if wi < lmin
-                              then f (n+wi) (A.unsafeIndex a i) (A.unsafeIndex a' i)
-                              else A.unsafeIndex maxa i
+             x = A.generate lmax $
+                 \i -> if i < lmin
+                          then f (n+i) (A.unsafeIndex a i) (A.unsafeIndex a' i)
+                          else A.unsafeIndex maxa i
          in  Chunk x lmax $ go (n+lmax) t t'
     go _ c Empty = c
     go _ _ c = c
@@ -218,11 +212,11 @@ zipChunked :: (Sample -> Sample -> Sample) -> Chunked -> Chunked -> Chunked
 zipChunked = zipChunkedAt . const
 
 -- | Same as 'zipChunkedAt', but it assumes both input 'Chunked' have the same length.
-zipChunkedAtSame :: (Word32 -> Sample -> Sample -> Sample) -> Chunked -> Chunked -> Chunked
+zipChunkedAtSame :: (Int -> Sample -> Sample -> Sample) -> Chunked -> Chunked -> Chunked
 {-# INLINE zipChunkedAtSame #-}
 zipChunkedAtSame f = go 0
   where
-    go n (Chunk a l t) (Chunk a' _ t') = Chunk (A.izipWith (f . (+n) . fromIntegral) a a') l
+    go n (Chunk a l t) (Chunk a' _ t') = Chunk (A.izipWith (f . (+n)) a a') l
       $ go (n+chunkSize) t t'
     go _ _ _ = Empty
 
@@ -235,9 +229,8 @@ zipChunkedSame = zipChunkedAtSame . const
 appendChunked :: Chunked -> Chunked -> Chunked
 appendChunked (Chunk a l Empty) c@(Chunk a' l' t)
  | l == chunkSize = Chunk a l c
- | l' > d = let dInt = fromIntegral d
-                sd = A.take dInt a'
-            in  Chunk (a <> sd) chunkSize $ appendChunked (Chunk (A.drop dInt a') (l'-d) Empty) t
+ | l' > d = let sd = A.take d a'
+            in  Chunk (a <> sd) chunkSize $ appendChunked (Chunk (A.drop d a') (l'-d) Empty) t
  | otherwise = appendChunked (Chunk (a <> a') (l+l') Empty) t
     where
      d = chunkSize - l
@@ -260,28 +253,26 @@ chunkFromList = A.fromList
 
 -- | /O(n)/. Create sample chunks from a list, grouping samples in arrays
 --   of 'chunkSize'.
-chunkedFromList :: Word32 -> [Sample] -> Chunked
+chunkedFromList :: Int -> [Sample] -> Chunked
 chunkedFromList n ss = h (1,ss)
  where
   f (a,l)  = Chunk (chunkFromList a) l
-  g (i,xs) = if i > q then if i == q + 1 then Just ((take (fromIntegral r) xs,r),(i+1,[]))
+  g (i,xs) = if i > q then if i == q + 1 then Just ((take r xs,r),(i+1,[]))
                                          else Nothing
-                      else let (ys,zs) = splitAt chunkSizeI xs
+                      else let (ys,zs) = splitAt chunkSize xs
                            in  Just ((ys,chunkSize),(i+1,zs))
   h z = case g z of
           Just (x,y) -> f x (h y)
           _ -> Empty
-  chunkSizeI :: Int
-  chunkSizeI = fromIntegral chunkSize
   (q,r) = quotRem n chunkSize
 
-trimChunked :: Word32 -> Word32 -> Chunked -> Chunked
+trimChunked :: Int -> Int -> Chunked -> Chunked
 trimChunked n0 n1 (Chunk a l t)
   | n0 >= l = trimChunked (n0-l) (n1-l) t
-  | n1 <  l = Chunk (A.slice (fromIntegral n0) (fromIntegral $ n1-n0) a) (n1-n0) Empty
+  | n1 <  l = Chunk (A.slice n0 (n1-n0) a) (n1-n0) Empty
            <> t
   | n0 == 0 = Chunk a l $ trimChunked 0 (n1-l) t
-  | otherwise = Chunk (A.drop (fromIntegral n0) a) (l-n0) Empty
+  | otherwise = Chunk (A.drop n0 a) (l-n0) Empty
              <> trimChunked 0 (n1-l) t
 trimChunked _ _ _ = Empty
 

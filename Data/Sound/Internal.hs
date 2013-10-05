@@ -39,8 +39,8 @@ type Time = Double
 --
 --   They also support decoding, so you can also get a 'Sound' from an encoded data, possibly
 --   coming from an actual sound file.
-data Sound = S { rate     :: !Word32  -- ^ Sample rate.
-               , nSamples :: !Word32  -- ^ Number of samples.
+data Sound = S { rate     :: !Int     -- ^ Sample rate.
+               , nSamples :: !Int     -- ^ Number of samples.
                , channels :: !Int     -- ^ Number of channels.
                , schunks  ::  Chunked -- ^ Sequence of samples.
                  }
@@ -66,7 +66,7 @@ instance NFData Sound where
 -- | Try to get a sample. If it is out of the range of the given sound,
 --   it returns the zero sample. This way, you can treat sounds as
 --   infinite signals that are zero from some time to infinity.
-atSample :: Word32 -- ^ Sample index.
+atSample :: Int    -- ^ Sample index.
          -> Sound  -- ^ Sound containing the sample.
          -> Sample
 atSample n (S _ _ nc cs) = fromMaybe (multiSample nc 0) $ cs ! n
@@ -77,15 +77,15 @@ atSample n (S _ _ nc cs) = fromMaybe (multiSample nc 0) $ cs ! n
   #-}
 
 -- | Calculates the time when a sample at a certain index occurs.
-sampleTime :: Word32 -- ^ Sample rate.
-           -> Word32 -- ^ Sample index.
-           -> Time   -- ^ Time when the sample occurs.
+sampleTime :: Int  -- ^ Sample rate.
+           -> Int  -- ^ Sample index.
+           -> Time -- ^ Time when the sample occurs.
 sampleTime r n = fromIntegral n / fromIntegral r
 
 -- | Calculates the sample index at a given time.
-timeSample :: Word32 -- ^ Sample rate.
-           -> Time   -- ^ Time when the sample occurs.
-           -> Word32 -- ^ Sample index.
+timeSample :: Int  -- ^ Sample rate.
+           -> Time -- ^ Time when the sample occurs.
+           -> Int  -- ^ Sample index.
 timeSample r d = floor $ fromIntegral r * d
 
 -- | Duration of a sound in seconds.
@@ -114,8 +114,8 @@ sample s t = atSample (timeSample (rate s) t) s
 -- >   fromFunction r d p (\t -> let i = timeSample r t
 -- >                             in  f i (g t))
 --
-mapSoundAt :: (Word32 -> Sample -> Sample)
-          -> Sound -> Sound
+mapSoundAt :: (Int -> Sample -> Sample)
+           -> Sound -> Sound
 mapSoundAt f s = s { schunks = mapChunked f (schunks s) }
 
 -- | Map a function over all samples in a given sound.
@@ -138,7 +138,7 @@ mapSound = mapSoundAt . const
 
 -- | Create a sound from a generator function 'Time' @->@ 'Sample'.
 --
-fromFunction :: Word32           -- ^ Sample rate.
+fromFunction :: Int              -- ^ Sample rate.
              -> Time             -- ^ Total duration.
              -> Maybe Time       -- ^ If your function is periodic, use this argument to indicate the period.
                                  --   Doing so you improve the performance of calling this function since it will
@@ -168,8 +168,8 @@ fromFunction rt d Nothing f = S rt n nc $ chunkedFromList n $
 
 -- | Create 'Chunks' with the given number of samples, each sample
 --   with the given number of channels, and every channel filled with zeroes.
-zeroChunks :: Word32 -- ^ Number of samples.
-           -> Int    -- ^ Number of channels.
+zeroChunks :: Int -- ^ Number of samples.
+           -> Int -- ^ Number of channels.
            -> Chunked
 {-# INLINE zeroChunks #-}
 zeroChunks n nc = chunkedFromList n $ repeat $ multiSample nc 0
