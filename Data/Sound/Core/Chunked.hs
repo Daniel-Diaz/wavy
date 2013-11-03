@@ -3,10 +3,12 @@
 module Data.Sound.Core.Chunked (
     -- * Samples
     Sample
+  , sampleVector
   , monoSample
   , multiSample
   , sampleLength
   , sampleFromList
+  , sampleFromVector
     -- ** Sample functions
   , appendSamples
   , mapSample
@@ -21,9 +23,11 @@ module Data.Sound.Core.Chunked (
   , halfChunkSize
     -- ** Vectors
   , vectorize
+  , devectorize
     -- ** Functions
   , (!) , (|>)
   , mapChunked
+  , mapChunkedArrays
   , zipChunked , zipChunkedAt
   , zipChunkedSame, zipChunkedAtSame
   , chunkFromList , chunkedFromList
@@ -47,7 +51,7 @@ import Control.DeepSeq
 --------------------------------------
 
 -- | A sample is a list of numbers from -1 to 1, one number per channel.
-newtype Sample = Sample (U.Vector Double)
+newtype Sample = Sample { sampleVector :: U.Vector Double }
 
 monoSample :: Double -> Sample
 {-# INLINE monoSample #-}
@@ -66,6 +70,9 @@ sampleLength (Sample v) = U.length v
 
 sampleFromList :: [Double] -> Sample
 sampleFromList = Sample . U.fromList
+
+sampleFromVector :: U.Vector Double -> Sample
+sampleFromVector = Sample
 
 foldrSample :: (Double -> r -> r) -> r -> Sample -> r
 foldrSample f e (Sample v) = U.foldr f e v
@@ -107,7 +114,7 @@ data Chunked =
 -- | Chunk size should be even, so @chunkSize = 2 * halfChunkSize@.
 --   Current value is @22050@.
 chunkSize :: Int
-chunkSize = 22050
+chunkSize = 2^(14::Int)
 
 -- * About the Chunk Size
 
@@ -131,7 +138,7 @@ infixr 2 !
 -- | /O(n/\/'chunkSize'/)/. Extract an element from the sample chunks.
 --   Index starts at zero.
 (!) :: Chunked -> Int -> Maybe Sample
-(Chunk a l t) ! n = if n < l then a A.!? fromIntegral n
+(Chunk a l t) ! n = if n < l then a A.!? n
                              else t ! (n-l)
 _ ! _ = Nothing
 
@@ -142,11 +149,27 @@ _ ! _ = Nothing
                         else Chunk (A.snoc a x) (l+1) t
 _ |> x = Chunk (A.singleton x) 1 Empty
 
--- | Collapse a chunked sequence of samples into a single 'A.Vector'.
-vectorize :: Chunked -> A.Vector Sample
-vectorize (Chunk a _ Empty) = a
-vectorize (Chunk a _ t)     = a <> vectorize t
-vectorize Empty = mempty
+getChunks :: Chunked -> [Array]
+getChunks (Chunk a _ t) = a : getChunks t
+getChunks Empty = []
+
+-- | Collapse a 'Chunked' sequence of samples into a single 'Array'.
+vectorize :: Chunked -> Array
+vectorize = A.concat . getChunks
+
+-- | Break an 'Array' of samples in a 'Chunked' sequence.
+devectorize :: Array -> Chunked
+devectorize v = chunkedFromList (A.length v) $ A.toList v
+
+-- | Map a 'Chunked' array of samples, chunk by chunk.
+--   The transformation function /must/ keep the array size
+--   of the input. Otherwise, the output 'Chunked' value will
+--   be malformed.
+mapChunkedArrays :: (Array -> Array) -> Chunked -> Chunked
+mapChunkedArrays f = go
+  where
+    go (Chunk a l t) = Chunk (f a) l $ go t
+    go _ = Empty
 
 {-# RULES
 "chunks/map" forall f g c. mapChunked f (mapChunked g c) = mapChunked (\i x -> g i (f i x)) c

@@ -37,6 +37,7 @@ Library
                , containers
                , AC-Random
                , data-binary-ieee754
+               , parallel
   Exposed-modules:
     Data.Sound.Core.Chunked
     Data.Sound
@@ -62,4 +63,4 @@ benchmark wavy-bench-encoding
   build-depends: base ==4.*
                , wavy
                , criterion
-  ghc-options: -O2
+  ghc-options: -O2 -threaded

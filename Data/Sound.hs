@@ -44,11 +44,16 @@ module Data.Sound (
  , loop, trim, backwards
  , affineFunction
  , linearFunction
+   -- * Experimental
+ , fourierSieve
    ) where
 
 import Data.Monoid
 import Data.Sound.Internal
 import Data.Sound.Core.Chunked
+import Data.Sound.Analysis
+import qualified Data.Vector.Unboxed as A
+import qualified Data.Complex as C
 -- Maybe
 import Data.Maybe (catMaybes)
 -- Random
@@ -172,6 +177,7 @@ s1@(S r l nc c) <.> s2@(S r' l' nc' c')
 --
 multiply :: Int -- ^ Number of channels factor.
          -> Sound -> Sound
+{-# INLINE[1] multiply #-}
 multiply n s = f 1
  where
   f k = if k == n then s else s <|> f (k+1)
@@ -669,3 +675,15 @@ affineFunction (a,b) (c,d) x = m*x + n
 --
 linearFunction :: (Double,Double) -> Double -> Double
 linearFunction = affineFunction (0,0)
+
+--------------------------------
+-- Room for experiments
+
+fourierSieve :: Double -> Sound -> Sound
+fourierSieve e s = s { schunks = {-mapChunkedArrays-} f (schunks s) }
+  where
+    f = devectorize . fmap sampleFromVector . unsplitVector -- Reconstruct chunked data
+      . fmap (vectorMakeReal .  g . vectorMakeComplex) -- Manipulate vector
+      . splitVector . fmap sampleVector . vectorize -- Deconstruct chunked data
+    g = fourierInverse . h . fourierTransform
+    h = A.map $ \c -> if C.magnitude c > e then c else 0

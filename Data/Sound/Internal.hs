@@ -145,7 +145,7 @@ fromFunction :: Int              -- ^ Sample rate.
                                  --   only calculate one period and then repeat it.
              -> (Time -> Sample) -- ^ Generator function.
              -> Sound            -- ^ Resulting sound.
-{-# NOINLINE fromFunction #-}
+{-# INLINE[1] fromFunction #-}
 fromFunction rt d (Just p) f = S rt n nc $ chunkedFromList n $ cycle xs
  where
   n  = timeSample rt d
