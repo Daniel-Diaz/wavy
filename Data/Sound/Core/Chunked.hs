@@ -75,6 +75,7 @@ sampleFromVector :: U.Vector Double -> Sample
 sampleFromVector = Sample
 
 foldrSample :: (Double -> r -> r) -> r -> Sample -> r
+{-# INLINE foldrSample #-}
 foldrSample f e (Sample v) = U.foldr f e v
 
 mapSample :: (Double -> Double) -> Sample -> Sample
@@ -111,10 +112,10 @@ data Chunked =
          {-# UNPACK #-} !Int     -- Length of the array
                          Chunked -- Tail of chunks
 
--- | Chunk size should be even, so @chunkSize = 2 * halfChunkSize@.
---   Current value is @22050@.
+-- | Chunk size is chosen as a power of two for efficiency reasons.
+--   Current value is @2^15 = 32768@.
 chunkSize :: Int
-chunkSize = 2^(14::Int)
+chunkSize = 2^(15::Int)
 
 -- * About the Chunk Size
 
@@ -236,7 +237,6 @@ zipChunked = zipChunkedAt . const
 
 -- | Same as 'zipChunkedAt', but it assumes both input 'Chunked' have the same length.
 zipChunkedAtSame :: (Int -> Sample -> Sample -> Sample) -> Chunked -> Chunked -> Chunked
-{-# INLINE zipChunkedAtSame #-}
 zipChunkedAtSame f = go 0
   where
     go n (Chunk a l t) (Chunk a' _ t') = Chunk (A.izipWith (f . (+n)) a a') l

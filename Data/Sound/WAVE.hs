@@ -27,7 +27,6 @@ module Data.Sound.WAVE (
 
 import Data.Monoid
 import Data.Word
-import Data.Int
 import qualified Data.ByteString.Lazy as B
 -- import Control.Arrow
 import Control.Applicative
@@ -224,9 +223,6 @@ half8 = halfW 8
 half16 :: Double
 half16 = halfW 16
 
-half32 :: Double
-half32 = halfW 32
-
 cast8 :: Double -> Word8
 cast8 x = fromIntegral . (truncate :: Double -> Int) $ -- Why is this faster than truncating directly to the word type?
             (x+1) * half8
@@ -245,13 +241,11 @@ decast16 x_ = if x < 0 then x / half16
  where
   x = fromIntegral x_
 
--- Too slow!
 cast32 :: Double -> Word32
--- cast32 x = fromIntegral . (truncate :: Double -> Int32) $ half32 * x
 cast32 = floatToWord . (realToFrac :: Double -> Float)
 
 decast32 :: Word32 -> Double
-decast32 x = (/half32) . fromIntegral . (fromIntegral :: Word32 -> Int32) $ x
+decast32 = (realToFrac :: Float -> Double) . wordToFloat
 
 -- | Create a 'WAVE' header for a sound. You can write this 'WAVE' directly
 --   to a file using 'encodeFile' or simply 'encode'.

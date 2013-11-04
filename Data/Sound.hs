@@ -680,10 +680,10 @@ linearFunction = affineFunction (0,0)
 -- Room for experiments
 
 fourierSieve :: Double -> Sound -> Sound
-fourierSieve e s = s { schunks = {-mapChunkedArrays-} f (schunks s) }
+fourierSieve e s = s { schunks = f (schunks s) }
   where
     f = devectorize . fmap sampleFromVector . unsplitVector -- Reconstruct chunked data
-      . fmap (vectorMakeReal .  g . vectorMakeComplex) -- Manipulate vector
-      . splitVector . fmap sampleVector . vectorize -- Deconstruct chunked data
+      . fmap (vectorMakeReal .  g . vectorMakeComplex)      -- Manipulate vector
+      . splitVector . fmap sampleVector . vectorize         -- Deconstruct chunked data
     g = fourierInverse . h . fourierTransform
     h = A.map $ \c -> if C.magnitude c > e then c else 0
