@@ -1,4 +1,6 @@
 
+{-# LANGUAGE TemplateHaskell #-}
+
 module Data.Sound.Analysis (
     -- * Types
     Complex, Vector
@@ -20,6 +22,8 @@ import qualified Data.Complex as C
 import qualified Data.Vector.Unboxed as A
 import qualified Data.Vector as V
 import Numeric.FFT.Vector.Unnormalized (dft,idft,run)
+import Numeric.FFT.Vector.Plan (Plan, PlanType (..), planOfType, execute)
+import Data.Sound.Core.Chunked (chunkSize)
 
 type Complex = C.Complex Double
 
@@ -42,15 +46,29 @@ hermitian f g = go 0
 norm :: Vector -> Complex
 norm f = sqrt $ hermitian f f
 
+chunkdft :: Plan Complex Complex
+chunkdft = planOfType Exhaustive dft chunkSize
+
+chunkidft :: Plan Complex Complex
+chunkidft = planOfType Exhaustive idft chunkSize
+
 -- | Fourier coefficients of a complex-valued function on Z(N).
 --   Finite Fourier Transform (FFT).
 fourierTransform :: Vector -> Vector
-fourierTransform v = A.map (*recip (fromIntegral $ A.length v)) $ run dft v
+fourierTransform v = f . g $ v
+  where
+   n = A.length v
+   q = recip $ fromIntegral n
+   f = A.map (*q)
+   g = if n == chunkSize then execute chunkdft else run dft
 
 -- | Build a complex-valued function on Z(N) from its Fourier coefficients.
 --   Inverse FFT.
 fourierInverse :: Vector -> Vector
-fourierInverse = run idft
+fourierInverse v = g v
+  where
+   n = A.length v
+   g = if n == chunkSize then execute chunkidft else run idft
 
 -- Utils
 
