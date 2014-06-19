@@ -662,14 +662,15 @@ noiseR r d a sd = S r n 1 $ chunkedFromList n xs
 
 -- Misc
 
--- | Build an affine function given two points of its graph.
+-- | Build an affine function given two points of its graph. The first
+--   coordinate of the two points must be different.
 affineFunction :: (Double,Double) -> (Double,Double) -> Double -> Double
 affineFunction (a,b) (c,d) x = m*x + n
   where
     m = (d-b)/(c-a)
     n = b - m*a
 
--- | Build a linear function given a point of its graph, different from @(0,0)@.
+-- | Build a linear function given a point of its graph outside of the Y axis.
 --
 -- > linearFunction = affineFunction (0,0)
 --

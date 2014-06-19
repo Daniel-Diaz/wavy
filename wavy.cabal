@@ -38,7 +38,7 @@ Library
                , AC-Random
                , data-binary-ieee754
                , parallel
-               , vector-fftw
+               , arb-fft >= 0.2.0.0
   Exposed-modules:
     Data.Sound.Core.Chunked
     Data.Sound
